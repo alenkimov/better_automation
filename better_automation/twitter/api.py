@@ -4,7 +4,7 @@ import aiohttp
 from aiohttp.client_exceptions import ContentTypeError
 
 from .errors import (
-    FailedToObtainCT0,
+    TwitterAPIException,
     HTTPException,
     BadRequest,
     Unauthorized,
@@ -14,12 +14,6 @@ from .errors import (
     TwitterServerError,
 )
 from ..http_client import BetterClientSession
-
-
-class TwitterAPIError(Exception):
-    def __init__(self, errors: list[dict]):
-        self.errors = errors
-        super().__init__(str(self.errors))
 
 
 class TwitterAPI(BetterClientSession):
@@ -104,7 +98,7 @@ class TwitterAPI(BetterClientSession):
             if "ct0" in response.cookies:
                 return response.cookies["ct0"].value
             else:
-                raise FailedToObtainCT0("Failed to obtain ct0")
+                raise TwitterAPIException("Failed to obtain ct0")
         except Forbidden as e:
             if "ct0" in e.response.cookies:
                 return e.response.cookies["ct0"].value

@@ -5,10 +5,6 @@ class TwitterAPIException(Exception):
     pass
 
 
-class FailedToObtainCT0(TwitterAPIException):
-    pass
-
-
 class HTTPException(TwitterAPIException):
     """HTTPException()
 
