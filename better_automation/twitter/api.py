@@ -113,6 +113,7 @@ class TwitterAPI(BetterClientSession):
             if not self.ct0:
                 self.set_ct0(await self._request_ct0())
             return await coro(self, *args, **kwargs)
+
         return wrapper
 
     @ensure_ct0
@@ -208,3 +209,297 @@ class TwitterAPI(BetterClientSession):
         response = await self.post(url, params=params)
         response_json = await response.json()
         return "id" in response_json
+
+    async def like(self, tweet_id: str | int) -> bool:
+        url = f"{self.base_url}/{self.queryId_like}/FavoriteTweet"
+        json_data = {
+            'variables': {
+                'tweet_id': str(tweet_id),
+            },
+            'queryId': self.queryId_like,
+        }
+        response = await self.post(url, json_data=json_data)
+        response_json = await response.json()
+        return "data" in response_json and response_json['data']['favorite_tweet'] == 'Done'
+
+    @staticmethod
+    async def _handle_media_request(response: aiohttp.ClientResponse):
+        content = await response.read()
+        encoding = response.charset or 'utf-8'
+        decoded_content = content.decode(encoding, errors='ignore')
+        return decoded_content
+
+    async def _upload_image(self, media_url: str = None) -> str:
+        """
+        Function for uploading Image_URL to twitter for posting it in future
+        :param media_url: Url to image
+        :return: Media_id uploaded to twitter. This uses for create_tweet() method
+        """
+        if media_url:
+            response_1 = await self.get(url=media_url)
+            bytes_media = response_1.content
+            len_media = len(str(bytes_media))
+
+            # 1 req
+            params = {
+                'command': 'INIT',
+                'total_bytes': len_media,
+                'media_type': 'image/jpeg',
+                'media_category': 'tweet_image',
+            }
+            response_2 = await self.post('https://upload.twitter.com/i/media/upload.json', params=params)
+            response_2_data = await response_2.json()
+            media_id_string = str(response_2_data.get('media_id_string'))
+
+            params = {
+                'command': 'APPEND',
+                'media_id': media_id_string,
+                'segment_index': '0',
+            }
+            await self.options('https://upload.twitter.com/i/media/upload.json', params=params)
+
+            # 3 req
+            headers = {
+                'content-type': 'multipart/form-data; boundary=----WebKitFormBoundaryCGqmEUMuU9BgPiZm',
+            }
+            data = b'------WebKitFormBoundaryCGqmEUMuU9BgPiZm\r\nContent-Disposition: form-data; name="media"; filename="blob"\r\nContent-Type: application/octet-stream\r\n\r\n'
+            data += b'' + bytes_media
+            data += b'\r\n------WebKitFormBoundaryCGqmEUMuU9BgPiZm--'
+            await self.post('https://upload.twitter.com/i/media/upload.json', headers=headers, params=params, data=data)
+
+            params = {
+                'command': 'FINALIZE',
+                'media_id': media_id_string,
+            }
+            response_4 = await self.post('https://upload.twitter.com/i/media/upload.json', params=params)
+            response_4_json = await response_4.json()
+            return response_4_json.get('media_id_string')
+
+    async def _create_tweet(self, json: dict) -> int:
+        """
+        :return: Tweet ID
+        """
+        response = await self.post(f"{self.base_url}/{self.queryId_create_tweet}/CreateTweet", json=json)
+        response_json = await response.json()
+        tweet_id = response_json['data']['create_tweet']['tweet_results']['result']['rest_id']
+        return int(tweet_id)
+
+    async def _create_retweet(self, json: dict) -> int:
+        """
+        :return: Retweet ID
+        """
+        response = await self.post(f"{self.base_url}/{self.queryId_retweet}/CreateRetweet", json=json)
+        response_json = await response.json()
+        retweet_id = response_json['data']['create_retweet']['retweet_results']['result']['rest_id']
+        return int(retweet_id)
+
+    async def tweet(
+            self,
+            text: str = None,
+            image_url: str = None,
+            tweet_id_for_reply: str | int = None,
+    ) -> int:
+        """
+        :return: Tweet ID
+        """
+        if text is None:
+            text = ""
+
+        json_data = {
+            'variables': {
+                'tweet_text': text,
+                'dark_request': False,
+                'media': {
+                    'media_entities': [],
+                    'possibly_sensitive': False},
+                'semantic_annotation_ids': [],
+            },
+            'features': {
+                'tweetypie_unmention_optimization_enabled': True,
+                'responsive_web_edit_tweet_api_enabled': True,
+                'graphql_is_translatable_rweb_tweet_is_translatable_enabled': True,
+                'view_counts_everywhere_api_enabled': True,
+                'longform_notetweets_consumption_enabled': True,
+                'tweet_awards_web_tipping_enabled': False,
+                'longform_notetweets_rich_text_read_enabled': True,
+                'longform_notetweets_inline_media_enabled': True,
+                'responsive_web_graphql_exclude_directive_enabled': True,
+                'verified_phone_label_enabled': False,
+                'freedom_of_speech_not_reach_fetch_enabled': True,
+                'standardized_nudges_misinfo': True,
+                'tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled': False,
+                'responsive_web_graphql_skip_user_profile_image_extensions_enabled': False,
+                'responsive_web_graphql_timeline_navigation_enabled': True,
+                'responsive_web_enhance_cards_enabled': False,
+                'responsive_web_twitter_article_tweet_consumption_enabled': False,
+                'responsive_web_media_download_video_enabled': False
+            },
+            'queryId': self.queryId_create_tweet,
+        }
+        if tweet_id_for_reply:
+            json_data['variables']['reply'] = {
+                'in_reply_to_tweet_id': str(tweet_id_for_reply),
+                'exclude_reply_user_ids': [],
+            }
+        if image_url:
+            json_data['variables']['media'] = {
+                'media_entities': [
+                    {
+                        'media_id': await self._upload_image(media_url=image_url),
+                        'tagged_users': [],
+                    },
+                ],
+                'possibly_sensitive': False,
+            }
+        return await self._create_tweet(json_data)
+
+    async def reply(self, tweet_id: int, text: str) -> int:
+        """
+        :return: Tweet ID
+        """
+        json_data = {
+            'variables': {
+                'tweet_text': text,
+                'reply': {
+                    'in_reply_to_tweet_id': str(tweet_id),
+                    'exclude_reply_user_ids': [],
+                },
+                'dark_request': False,
+                'media': {
+                    'media_entities': [],
+                    'possibly_sensitive': False,
+                },
+                'semantic_annotation_ids': [],
+            },
+            'features': {
+                'tweetypie_unmention_optimization_enabled': True,
+                'responsive_web_edit_tweet_api_enabled': True,
+                'graphql_is_translatable_rweb_tweet_is_translatable_enabled': True,
+                'view_counts_everywhere_api_enabled': True,
+                'longform_notetweets_consumption_enabled': True,
+                'tweet_awards_web_tipping_enabled': False,
+                'longform_notetweets_rich_text_read_enabled': True,
+                'longform_notetweets_inline_media_enabled': True,
+                'responsive_web_graphql_exclude_directive_enabled': True,
+                'verified_phone_label_enabled': False,
+                'freedom_of_speech_not_reach_fetch_enabled': True,
+                'standardized_nudges_misinfo': True,
+                'tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled': True,
+                'responsive_web_graphql_skip_user_profile_image_extensions_enabled': False,
+                'responsive_web_graphql_timeline_navigation_enabled': True,
+                'responsive_web_enhance_cards_enabled': False,
+                'responsive_web_media_download_video_enabled': False,
+                'responsive_web_twitter_article_tweet_consumption_enabled': False
+            },
+            'queryId': self.queryId_create_tweet,
+        }
+        return await self._create_tweet(json_data)
+
+    async def retweet(self, tweet_id: int) -> int:
+        """
+        :return: Retweet ID
+        """
+        json_data = {
+            'variables': {
+                'tweet_id': str(tweet_id),
+            },
+            'queryId': self.queryId_retweet,
+        }
+        return await self._create_retweet(json_data)
+
+    async def pin_tweet(self, tweet_id: int) -> bool:
+        """
+        :return: True if pinned
+        """
+        data = {
+            'tweet_mode': 'extended',
+            'id': str(tweet_id),
+        }
+        headers = {
+            'content-type': 'application/x-www-form-urlencoded',
+        }
+        response = await self.post('https://api.twitter.com/1.1/account/pin_tweet.json', headers=headers, data=data)
+        response_json = await response.json()
+        return 'pinned_tweets' in response_json
+
+    async def request_tweet_data(self, tweet_id: int) -> list[dict]:
+        tweet_details = []
+
+        variables = {
+            "focalTweetId": str(tweet_id),
+            "with_rux_injections": False,
+            "includePromotedContent": True,
+            "withCommunity": True,
+            "withQuickPromoteEligibilityTweetFields": True,
+            "withBirdwatchNotes": True,
+            "withVoice": True,
+            "withV2Timeline": True,
+        }
+        features = {
+            "rweb_lists_timeline_redesign_enabled": True,
+            "responsive_web_graphql_exclude_directive_enabled": True,
+            "verified_phone_label_enabled": False,
+            "creator_subscriptions_tweet_preview_api_enabled": True,
+            "responsive_web_graphql_timeline_navigation_enabled": True,
+            "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
+            "tweetypie_unmention_optimization_enabled": True,
+            "responsive_web_edit_tweet_api_enabled": True,
+            "graphql_is_translatable_rweb_tweet_is_translatable_enabled": True,
+            "view_counts_everywhere_api_enabled": True,
+            "longform_notetweets_consumption_enabled": True,
+            "tweet_awards_web_tipping_enabled": False,
+            "freedom_of_speech_not_reach_fetch_enabled": True,
+            "standardized_nudges_misinfo": True,
+            "tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled": True,
+            "longform_notetweets_rich_text_read_enabled": True,
+            "longform_notetweets_inline_media_enabled": True,
+            "responsive_web_enhance_cards_enabled": False,
+        }
+        params = {
+            'variables': to_json(variables),
+            'features': to_json(features),
+        }
+        url = f"{self.base_url}/{self.queryId_tweet_details}/TweetDetail"
+        response = await self.get(url, params=params)
+        response_json = await response.json()
+
+        if response_json.get('data'):
+            tweet_data = response_json['data']['threaded_conversation_with_injections_v2']['instructions'][0]['entries']
+            tweet_owner_id = tweet_data[0]['content']['itemContent']['tweet_results']['result']['legacy'][
+                'user_id_str']
+            try:
+                tweet = tweet_data[1]
+                entryId = tweet['entryId']
+                in_reply_to_user_id_str = tweet['content']['items'][0]['item'].get('itemContent').get(
+                    'tweet_results').get(
+                    'result').get('legacy').get('in_reply_to_user_id_str')
+                in_reply_to_status_id_str = tweet['content']['items'][0]['item'].get('itemContent').get(
+                    'tweet_results').get('result').get('legacy').get('in_reply_to_status_id_str')
+                if entryId.find('conversationthread') != -1 and (
+                        in_reply_to_status_id_str and in_reply_to_user_id_str) and int(
+                        in_reply_to_status_id_str) == int(tweet_id) and int(in_reply_to_user_id_str) == int(
+                        tweet_owner_id):
+                    tweet_items = tweet['content']['items']
+                    for item in tweet_items:
+                        try:
+                            in_reply_to_status_id_str = item['item']['itemContent']['tweet_results']['result'][
+                                'legacy'].get('in_reply_to_status_id_str')
+                            user_id = item['item']['itemContent']['tweet_results']['result']['legacy'][
+                                'user_id_str']
+
+                            if int(tweet_owner_id) == int(user_id) and int(in_reply_to_status_id_str) == int(
+                                    tweet_id):
+                                tweet_id = item['item']['itemContent']['tweet_results']['result'].get('rest_id')
+                                text = item['item']['itemContent']['tweet_results']['result']['legacy']['full_text']
+                                if item.get('item').get('itemContent').get('tweet_results').get('result').get(
+                                        'legacy').get('extended_entities'):
+                                    media_url = item['item']['itemContent']['tweet_results']['result']['legacy'][
+                                        'extended_entities']['media'][0]['media_url_https']
+                                else:
+                                    media_url = None
+                                tweet_details.append({'text': text, 'media_url': media_url})
+                        except KeyError:
+                            pass
+            except IndexError:
+                pass
+        return tweet_details
