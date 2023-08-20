@@ -174,6 +174,7 @@ class TwitterAPI(BetterClientSession):
         username = response_data.get("screen_name")
         return username
 
+    @ensure_ct0
     async def request_user_id(self, user_handle: str):
         if user_handle.startswith("@"):
             user_handle = user_handle[1:]
@@ -188,6 +189,7 @@ class TwitterAPI(BetterClientSession):
         user_id = str(response_json['data']['user_result_by_screen_name']['result']['rest_id'])
         return user_id
 
+    @ensure_ct0
     async def follow(self, user_id: str) -> bool:
         url = "https://twitter.com/i/api/1.1/friendships/create.json"
         params = {
@@ -210,6 +212,7 @@ class TwitterAPI(BetterClientSession):
         response_json = await response.json()
         return "id" in response_json
 
+    @ensure_ct0
     async def like(self, tweet_id: str | int) -> bool:
         url = f"{self.base_url}/{self.queryId_like}/FavoriteTweet"
         json_data = {
@@ -218,7 +221,7 @@ class TwitterAPI(BetterClientSession):
             },
             'queryId': self.queryId_like,
         }
-        response = await self.post(url, json_data=json_data)
+        response = await self.post(url, json=json_data)
         response_json = await response.json()
         return "data" in response_json and response_json['data']['favorite_tweet'] == 'Done'
 
@@ -293,6 +296,7 @@ class TwitterAPI(BetterClientSession):
         retweet_id = response_json['data']['create_retweet']['retweet_results']['result']['rest_id']
         return int(retweet_id)
 
+    @ensure_ct0
     async def tweet(
             self,
             text: str = None,
@@ -353,6 +357,7 @@ class TwitterAPI(BetterClientSession):
             }
         return await self._create_tweet(json_data)
 
+    @ensure_ct0
     async def reply(self, tweet_id: int, text: str) -> int:
         """
         :return: Tweet ID
@@ -395,6 +400,7 @@ class TwitterAPI(BetterClientSession):
         }
         return await self._create_tweet(json_data)
 
+    @ensure_ct0
     async def retweet(self, tweet_id: int) -> int:
         """
         :return: Retweet ID
@@ -407,6 +413,7 @@ class TwitterAPI(BetterClientSession):
         }
         return await self._create_retweet(json_data)
 
+    @ensure_ct0
     async def pin_tweet(self, tweet_id: int) -> bool:
         """
         :return: True if pinned
@@ -422,6 +429,7 @@ class TwitterAPI(BetterClientSession):
         response_json = await response.json()
         return 'pinned_tweets' in response_json
 
+    @ensure_ct0
     async def request_tweet_data(self, tweet_id: int) -> list[dict]:
         tweet_details = []
 
