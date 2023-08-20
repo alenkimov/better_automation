@@ -14,6 +14,7 @@ from .errors import (
     TwitterServerError,
 )
 from ..http_client import BetterClientSession
+from ..utils import to_json
 
 
 class TwitterAPI(BetterClientSession):
@@ -39,7 +40,7 @@ class TwitterAPI(BetterClientSession):
     queryId_handler_converter = '9zwVLJ48lmVUk8u_Gh9DmA'
     queryId_tweet_parser = 'Uuw5X2n3tuGE_SatnXUqLA'
     queryId_tweet_details = 'VWFGPVAGkZMGRKGe3GFFnA'
-    base_url = 'https://twitter.com/i/api/graphql/'
+    base_url = 'https://twitter.com/i/api/graphql'
 
     def __init__(self, auth_token: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -139,7 +140,7 @@ class TwitterAPI(BetterClientSession):
         return code
 
     @ensure_ct0
-    async def _post_authorise(self, bind_code: str):
+    async def _confirm_binding(self, bind_code: str):
         data = {
             'approval': 'true',
             'code': bind_code,
@@ -149,7 +150,7 @@ class TwitterAPI(BetterClientSession):
 
     async def bind_app(self, *args, **kwargs):
         bind_code = await self._request_bind_code(*args, **kwargs)
-        await self._post_authorise(bind_code)
+        await self._confirm_binding(bind_code)
         return bind_code
 
     @ensure_ct0
@@ -171,3 +172,39 @@ class TwitterAPI(BetterClientSession):
         response_data: dict = await response.json()
         username = response_data.get("screen_name")
         return username
+
+    async def request_user_id(self, user_handle: str):
+        if user_handle.startswith("@"):
+            user_handle = user_handle[1:]
+
+        url = f"{self.base_url}/{self.queryId_handler_converter}/ProfileSpotlightsQuery"
+
+        params = {
+            'variables': to_json({"screen_name": f"{user_handle}"}),
+        }
+        response = await self.get(url, params=params)
+        response_json = await response.json()
+        user_id = str(response_json['data']['user_result_by_screen_name']['result']['rest_id'])
+        return user_id
+
+    async def follow(self, user_id: str) -> bool:
+        url = "https://twitter.com/i/api/1.1/friendships/create.json"
+        params = {
+            'include_profile_interstitial_type': '1',
+            'include_blocking': '1',
+            'include_blocked_by': '1',
+            'include_followed_by': '1',
+            'include_want_retweets': '1',
+            'include_mute_edge': '1',
+            'include_can_dm': '1',
+            'include_can_media_tag': '1',
+            'include_ext_has_nft_avatar': '1',
+            'include_ext_is_blue_verified': '1',
+            'include_ext_verified_type': '1',
+            'include_ext_profile_image_shape': '1',
+            'skip_status': '1',
+            'user_id': user_id,
+        }
+        response = await self.post(url, params=params)
+        response_json = await response.json()
+        return "id" in response_json
