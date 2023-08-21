@@ -5,10 +5,9 @@ from .file import (
     load_toml,
     write_lines,
     write_json,
+    to_json,
 )
 from .other import (
-    chunks,
-    to_json,
     curry_async,
 )
 
@@ -20,7 +19,6 @@ __all__ = [
     "load_toml",
     "write_lines",
     "write_json",
-    "chunks",
     "to_json",
     "curry_async",
 ]

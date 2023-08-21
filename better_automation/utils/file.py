@@ -35,3 +35,7 @@ def load_json(filepath: Path | str) -> dict:
 def write_json(filepath: Path | str, data):
     with open(filepath, "w") as file:
         json.dump(data, file, indent=4)
+
+
+def to_json(obj) -> str:
+    return json.dumps(obj, separators=(',', ':'), ensure_ascii=True)
