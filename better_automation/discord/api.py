@@ -1,7 +1,9 @@
-from ..http_client import BetterClientSession
+import aiohttp
+
+from ..http import BetterHTTPClient
 
 
-class DiscordAPI(BetterClientSession):
+class DiscordAPI(BetterHTTPClient):
     DEFAULT_HEADERS = {
         "authority": "discord.com",
         "accept": "*/*",
@@ -10,15 +12,15 @@ class DiscordAPI(BetterClientSession):
         "origin": "https://discord.com",
     }
 
-    def __init__(self, auth_token: str, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.headers.update(self.DEFAULT_HEADERS)
+    def __init__(self, session: aiohttp.ClientSession, auth_token: str, *args, **kwargs):
+        super().__init__(session, *args, **kwargs)
+        self.session.headers.update(self.DEFAULT_HEADERS)
         self._auth_token = None
         self.set_auth_token(auth_token)
 
     def set_auth_token(self, auth_token: str):
         self._auth_token = auth_token
-        self.headers.update({"authorization": auth_token})
+        self.session.headers.update({"authorization": auth_token})
 
     @property
     def auth_token(self) -> str | None:
@@ -40,7 +42,7 @@ class DiscordAPI(BetterClientSession):
             "permissions": "0",
             "authorize": True,
         }
-        response = await self.post(url, json=payload, params=querystring)
+        response = await self.request("POST", url, json=payload, params=querystring)
         data = await response.json()
         code = data["location"].split("=")[1]
         return code

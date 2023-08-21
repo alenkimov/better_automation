@@ -1,44 +1,31 @@
-import asyncio
-from typing import Iterable, Callable
 from collections import defaultdict
+from typing import Iterable, Callable
 
-from tqdm.asyncio import tqdm
+import aiohttp
+from aiohttp_socks import ProxyConnector
 
-from .http_client import CustomClientSession
-from .proxy import Proxy
+from .utils.other import bounded_gather
 
 
 async def _process_accounts_with_session(
         accounts: Iterable,
         fn: Callable,
         *,
-        proxy: Proxy = None,
+        proxy: str = None,
 ):
-    async with CustomClientSession(proxy=proxy) as session:
+    connector = ProxyConnector.from_url(proxy) if proxy else aiohttp.TCPConnector()
+    async with aiohttp.ClientSession(connector=connector) as session:
         for account in accounts:
             await fn(session, account)
 
 
-async def bounded_gather(funcs, max_tasks=None):
-    if max_tasks is None:
-        return await tqdm.gather(*funcs)
-
-    semaphore = asyncio.Semaphore(max_tasks)
-
-    async def worker(fn):
-        async with semaphore:
-            return await fn
-
-    return await tqdm.gather(*(worker(fn) for fn in funcs))
-
-
 async def process_accounts_with_session(
         accounts: Iterable,
-        proxies: Iterable[Proxy],
+        proxies: Iterable[str],
         fn: Callable,
         max_tasks: int = None,
 ):
-    proxy_to_accounts: defaultdict[Proxy: list[accounts]] = defaultdict(list)
+    proxy_to_accounts: defaultdict[str: list[accounts]] = defaultdict(list)
     if proxies:
         proxies = tuple(proxies)
         for i, account in enumerate(accounts):

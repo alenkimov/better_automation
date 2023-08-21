@@ -14,11 +14,11 @@ from .errors import (
     TooManyRequests,
     TwitterServerError,
 )
-from ..http_client import BetterClientSession
+from ..http import BetterHTTPClient
 from ..utils import to_json
 
 
-class TwitterAPI(BetterClientSession):
+class TwitterAPI(BetterHTTPClient):
     DEFAULT_HEADERS = {
         'authority': 'twitter.com',
         'accept': '*/*',
@@ -43,9 +43,9 @@ class TwitterAPI(BetterClientSession):
     queryId_tweet_details = 'VWFGPVAGkZMGRKGe3GFFnA'
     base_url = 'https://twitter.com/i/api/graphql'
 
-    def __init__(self, auth_token: str, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.headers.update(self.DEFAULT_HEADERS)
+    def __init__(self, session: aiohttp.ClientSession, auth_token: str, *args, **kwargs):
+        super().__init__(session, *args, **kwargs)
+        self.session.headers.update(self.DEFAULT_HEADERS)
         self._auth_token = None
         self._ct0 = None
         self.set_auth_token(auth_token)
@@ -53,12 +53,12 @@ class TwitterAPI(BetterClientSession):
 
     def set_auth_token(self, auth_token: str):
         self._auth_token = auth_token
-        self.cookie_jar.update_cookies({"auth_token": auth_token})
+        self.session.cookie_jar.update_cookies({"auth_token": auth_token})
 
     def set_ct0(self, ct0: str):
         self._ct0 = ct0
-        self.headers["x-csrf-token"] = ct0
-        self.cookie_jar.update_cookies({"ct0": ct0})
+        self.session.headers["x-csrf-token"] = ct0
+        self.session.cookie_jar.update_cookies({"ct0": ct0})
 
     @property
     def auth_token(self) -> str | None:
@@ -68,8 +68,8 @@ class TwitterAPI(BetterClientSession):
     def ct0(self) -> str | None:
         return self._ct0
 
-    async def _request(self, *args, **kwargs) -> aiohttp.ClientResponse:
-        response = await super()._request(*args, **kwargs)
+    async def request(self, *args, **kwargs) -> aiohttp.ClientResponse:
+        response = await super().request(*args, **kwargs)
 
         try:
             response_json = await response.json()
@@ -96,7 +96,7 @@ class TwitterAPI(BetterClientSession):
     async def _request_ct0(self) -> str:
         url = 'https://twitter.com/i/api/2/oauth2/authorize'
         try:
-            response = await self.get(url)
+            response = await self.request("GET", url)
             if "ct0" in response.cookies:
                 return response.cookies["ct0"].value
             else:
@@ -148,7 +148,7 @@ class TwitterAPI(BetterClientSession):
             'code': bind_code,
         }
         headers = {'content-type': 'application/x-www-form-urlencoded'}
-        await self.post('https://twitter.com/i/api/2/oauth2/authorize', headers=headers, data=data)
+        await self.request("POST", 'https://twitter.com/i/api/2/oauth2/authorize', headers=headers, data=data)
 
     async def bind_app(self, *args, **kwargs):
         bind_code = await self._request_bind_code(*args, **kwargs)
@@ -169,8 +169,7 @@ class TwitterAPI(BetterClientSession):
             'include_ext_dm_nsfw_media_filter': 'true',
             'include_ext_sharing_audiospaces_listening_data_with_followers': 'true',
         }
-        del self.headers['content-type']
-        response = await self.get(url, params=params)
+        response = await self.request("GET", url, params=params)
         response_data: dict = await response.json()
         username = response_data.get("screen_name")
         return username
@@ -185,7 +184,7 @@ class TwitterAPI(BetterClientSession):
         params = {
             'variables': to_json({"screen_name": f"{user_handle}"}),
         }
-        response = await self.get(url, params=params)
+        response = await self.request("GET", url, params=params)
         response_json = await response.json()
         user_id = str(response_json['data']['user_result_by_screen_name']['result']['rest_id'])
         return user_id
@@ -209,7 +208,7 @@ class TwitterAPI(BetterClientSession):
             'skip_status': '1',
             'user_id': user_id,
         }
-        response = await self.post(url, params=params)
+        response = await self.request("POST", url, params=params)
         response_json = await response.json()
         return "id" in response_json
 
@@ -222,7 +221,7 @@ class TwitterAPI(BetterClientSession):
             },
             'queryId': self.queryId_like,
         }
-        response = await self.post(url, json=json_data)
+        response = await self.request("POST", url, json=json_data)
         response_json = await response.json()
         return "data" in response_json and response_json['data']['favorite_tweet'] == 'Done'
 
@@ -236,7 +235,7 @@ class TwitterAPI(BetterClientSession):
     @ensure_ct0
     async def upload_image(self, image_url: str) -> int:
         async def request_image(url: str) -> aiohttp.ClientResponse:
-            return await self.get(url)
+            return await super(TwitterAPI, self).request("GET", url)
 
         async def _init(total_bytes):
             params = {
@@ -245,7 +244,7 @@ class TwitterAPI(BetterClientSession):
                 'media_type': 'image/jpeg',
                 'media_category': 'tweet_image',
             }
-            response = await self.post('https://upload.twitter.com/i/media/upload.json', params=params)
+            response = await self.request("POST", 'https://upload.twitter.com/i/media/upload.json', params=params)
             response_data = await response.json()
             return response_data['media_id_string']
 
@@ -255,22 +254,22 @@ class TwitterAPI(BetterClientSession):
                 'media_id': str(media_id),
                 'segment_index': '0',
             }
-            await self.options('https://upload.twitter.com/i/media/upload.json', params=params)
+            await self.request("OPTIONS", 'https://upload.twitter.com/i/media/upload.json', params=params)
 
             writer = MultipartWriter(boundary='----WebKitFormBoundaryCGqmEUMuU9BgPiZm')
             part = writer.append(image_as_bytes)
             part.set_content_disposition('form-data', name="media", filename="blob")
             part.headers['Content-Type'] = 'application/octet-stream'
             headers = {'content-type': writer.headers['Content-Type']}
-            await self.post('https://upload.twitter.com/i/media/upload.json', headers=headers, params=params,
-                            data=writer)
+            await self.request("POST", 'https://upload.twitter.com/i/media/upload.json',
+                               headers=headers,  params=params, data=writer)
 
         async def _finalize(media_id):
             params = {
                 'command': 'FINALIZE',
                 'media_id': str(media_id),
             }
-            await self.post('https://upload.twitter.com/i/media/upload.json', params=params)
+            await self.request("POST", 'https://upload.twitter.com/i/media/upload.json', params=params)
 
         image_response = await request_image(image_url)
         media_id = await _init(image_response.content.total_bytes)
@@ -282,7 +281,7 @@ class TwitterAPI(BetterClientSession):
         """
         :return: Tweet ID
         """
-        response = await self.post(f"{self.base_url}/{self.queryId_create_tweet}/CreateTweet", json=json)
+        response = await self.request("POST", f"{self.base_url}/{self.queryId_create_tweet}/CreateTweet", json=json)
         response_json = await response.json()
         tweet_id = response_json['data']['create_tweet']['tweet_results']['result']['rest_id']
         return int(tweet_id)
@@ -291,7 +290,7 @@ class TwitterAPI(BetterClientSession):
         """
         :return: Retweet ID
         """
-        response = await self.post(f"{self.base_url}/{self.queryId_retweet}/CreateRetweet", json=json)
+        response = await self.request("POST", f"{self.base_url}/{self.queryId_retweet}/CreateRetweet", json=json)
         response_json = await response.json()
         retweet_id = response_json['data']['create_retweet']['retweet_results']['result']['rest_id']
         return int(retweet_id)
@@ -426,7 +425,7 @@ class TwitterAPI(BetterClientSession):
         headers = {
             'content-type': 'application/x-www-form-urlencoded',
         }
-        response = await self.post('https://api.twitter.com/1.1/account/pin_tweet.json', headers=headers, data=data)
+        response = await self.request("POST", 'https://api.twitter.com/1.1/account/pin_tweet.json', headers=headers, data=data)
         response_json = await response.json()
         return 'pinned_tweets' in response_json
 
@@ -469,7 +468,7 @@ class TwitterAPI(BetterClientSession):
             'features': to_json(features),
         }
         url = f"{self.base_url}/{self.queryId_tweet_details}/TweetDetail"
-        response = await self.get(url, params=params)
+        response = await self.request("GET", url, params=params)
         response_json = await response.json()
 
         if response_json.get('data'):

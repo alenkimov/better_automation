@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "better-automation"
-version = "0.1.7"
+version = "0.2.0"
 description = "Site automation tools"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
@@ -8,11 +8,10 @@ packages = [{include = "better_automation"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-pyuseragents = "^1.0.5"
 tqdm = "^4.66.1"
+pyuseragents = "^1.0.5"
 aioimaplib = "^1.0.1"
-python-socks = {extras = ["asyncio"], version = "^2.3.0"}
-aiohttp = "^3.8.5"
+aiohttp-socks = "^0.8.0"
 
 
 [build-system]
