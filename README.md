@@ -8,6 +8,11 @@
 pip install better-automation
 ```
 
+
+More libraries of the family:
+- [better-web3](https://github.com/alenkimov/better_web3)
+- [better-proxy](https://github.com/alenkimov/better_proxy)
+
 ```python
 import aiohttp
 from better_automation import TwitterAPI
