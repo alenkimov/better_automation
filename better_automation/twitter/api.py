@@ -272,8 +272,9 @@ class TwitterAPI(BetterHTTPClient):
             await self.request("POST", 'https://upload.twitter.com/i/media/upload.json', params=params)
 
         image_response = await request_image(image_url)
-        media_id = await _init(image_response.content.total_bytes)
-        await _append(media_id, await image_response.read())
+        image_as_bytes = await image_response.read()
+        media_id = await _init(len(image_as_bytes))
+        await _append(media_id, image_as_bytes)
         await _finalize(media_id)
         return media_id
 
