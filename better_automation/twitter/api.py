@@ -1,6 +1,7 @@
 from functools import wraps
 
 import aiohttp
+from aiohttp import MultipartWriter
 from aiohttp.client_exceptions import ContentTypeError
 
 from .errors import (
@@ -232,51 +233,50 @@ class TwitterAPI(BetterClientSession):
         decoded_content = content.decode(encoding, errors='ignore')
         return decoded_content
 
-    async def _upload_image(self, media_url: str = None) -> str:
-        """
-        Function for uploading Image_URL to twitter for posting it in future
-        :param media_url: Url to image
-        :return: Media_id uploaded to twitter. This uses for create_tweet() method
-        """
-        if media_url:
-            response_1 = await self.get(url=media_url)
-            bytes_media = response_1.content
-            len_media = len(str(bytes_media))
+    @ensure_ct0
+    async def upload_image(self, image_url: str) -> int:
+        async def request_image(url: str) -> aiohttp.ClientResponse:
+            return await self.get(url)
 
-            # 1 req
+        async def _init(total_bytes):
             params = {
                 'command': 'INIT',
-                'total_bytes': len_media,
+                'total_bytes': total_bytes,
                 'media_type': 'image/jpeg',
                 'media_category': 'tweet_image',
             }
-            response_2 = await self.post('https://upload.twitter.com/i/media/upload.json', params=params)
-            response_2_data = await response_2.json()
-            media_id_string = str(response_2_data.get('media_id_string'))
+            response = await self.post('https://upload.twitter.com/i/media/upload.json', params=params)
+            response_data = await response.json()
+            return response_data['media_id_string']
 
+        async def _append(media_id, image_as_bytes: bytes):
             params = {
                 'command': 'APPEND',
-                'media_id': media_id_string,
+                'media_id': str(media_id),
                 'segment_index': '0',
             }
             await self.options('https://upload.twitter.com/i/media/upload.json', params=params)
 
-            # 3 req
-            headers = {
-                'content-type': 'multipart/form-data; boundary=----WebKitFormBoundaryCGqmEUMuU9BgPiZm',
-            }
-            data = b'------WebKitFormBoundaryCGqmEUMuU9BgPiZm\r\nContent-Disposition: form-data; name="media"; filename="blob"\r\nContent-Type: application/octet-stream\r\n\r\n'
-            data += b'' + bytes_media
-            data += b'\r\n------WebKitFormBoundaryCGqmEUMuU9BgPiZm--'
-            await self.post('https://upload.twitter.com/i/media/upload.json', headers=headers, params=params, data=data)
+            writer = MultipartWriter(boundary='----WebKitFormBoundaryCGqmEUMuU9BgPiZm')
+            part = writer.append(image_as_bytes)
+            part.set_content_disposition('form-data', name="media", filename="blob")
+            part.headers['Content-Type'] = 'application/octet-stream'
+            headers = {'content-type': writer.headers['Content-Type']}
+            await self.post('https://upload.twitter.com/i/media/upload.json', headers=headers, params=params,
+                            data=writer)
 
+        async def _finalize(media_id):
             params = {
                 'command': 'FINALIZE',
-                'media_id': media_id_string,
+                'media_id': str(media_id),
             }
-            response_4 = await self.post('https://upload.twitter.com/i/media/upload.json', params=params)
-            response_4_json = await response_4.json()
-            return response_4_json.get('media_id_string')
+            await self.post('https://upload.twitter.com/i/media/upload.json', params=params)
+
+        image_response = await request_image(image_url)
+        media_id = await _init(image_response.content.total_bytes)
+        await _append(media_id, await image_response.read())
+        await _finalize(media_id)
+        return media_id
 
     async def _create_tweet(self, json: dict) -> int:
         """
@@ -300,7 +300,8 @@ class TwitterAPI(BetterClientSession):
     async def tweet(
             self,
             text: str = None,
-            image_url: str = None,
+            *,
+            media_id: int = None,
             tweet_id_for_reply: str | int = None,
     ) -> int:
         """
@@ -345,11 +346,11 @@ class TwitterAPI(BetterClientSession):
                 'in_reply_to_tweet_id': str(tweet_id_for_reply),
                 'exclude_reply_user_ids': [],
             }
-        if image_url:
+        if media_id:
             json_data['variables']['media'] = {
                 'media_entities': [
                     {
-                        'media_id': await self._upload_image(media_url=image_url),
+                        'media_id': media_id,
                         'tagged_users': [],
                     },
                 ],
@@ -485,8 +486,8 @@ class TwitterAPI(BetterClientSession):
                     'tweet_results').get('result').get('legacy').get('in_reply_to_status_id_str')
                 if entryId.find('conversationthread') != -1 and (
                         in_reply_to_status_id_str and in_reply_to_user_id_str) and int(
-                        in_reply_to_status_id_str) == int(tweet_id) and int(in_reply_to_user_id_str) == int(
-                        tweet_owner_id):
+                    in_reply_to_status_id_str) == int(tweet_id) and int(in_reply_to_user_id_str) == int(
+                    tweet_owner_id):
                     tweet_items = tweet['content']['items']
                     for item in tweet_items:
                         try:
