@@ -1,6 +1,5 @@
 import re
 from pathlib import Path
-from typing import Iterable
 
 from .utils import load_lines
 
@@ -14,29 +13,11 @@ PROXY_FORMATS_REGEXP = [
 
 
 class Proxy:
-    """
-    A class to represent a proxy connection.
-
-    Attributes
-    ----------
-    ip : str
-        IP address of the proxy server
-    port : int
-        Port to use for the proxy server
-    protocol : str, optional
-        Protocol to use for the proxy connection, by default "http"
-    login : str, optional
-        Login for the proxy server, by default None
-    password : str, optional
-        Password for the proxy server, by default None
-    """
-
     def __init__(
             self,
             ip: str,
             port: int,
             *,
-            tags: Iterable[str] = None,
             protocol: str = None,
             login: str = None,
             password: str = None,
@@ -46,37 +27,9 @@ class Proxy:
         self.port = port
         self.login = login
         self.password = password
-        self.tags = set(tags) if tags else set()
 
     @classmethod
-    def from_str(cls, proxy: str, *, tags: Iterable[str] = None) -> "Proxy":
-        """
-        Class method to create a Proxy object from a string.
-
-        The string can be in one of the following formats:
-        - '(type://)?ip:port[:@|]login:password'
-        - '(type://)?login:password[:@|]ip:port'
-
-        Parameters
-        ----------
-            proxy : str
-                Proxy connection string in one of the above formats.
-
-        Returns
-        -------
-            Proxy
-                A Proxy object.
-
-        Examples
-        --------
-        >>> proxy = Proxy.from_str('192.168.1.1:8080')
-        >>> print(proxy)
-        http://192.168.1.1:8080
-
-        >>> proxy = Proxy.from_str('https://user:pass@192.168.1.1:8080')
-        >>> print(proxy)
-        https://192.168.1.1:8080@user:pass
-        """
+    def from_str(cls, proxy: str) -> "Proxy":
         for pattern in PROXY_FORMATS_REGEXP:
             match = pattern.match(proxy)
             if match:
@@ -86,14 +39,13 @@ class Proxy:
                     protocol=match.group('type'),
                     login=match.group('login'),
                     password=match.group('password'),
-                    tags=tags,
                 )
 
         raise ValueError(f'Unsupported proxy format: {proxy}')
 
     @classmethod
-    def from_file(cls, filepath: Path | str) -> set["Proxy"]:
-        return {cls.from_str(proxy) for proxy in load_lines(filepath)}
+    def from_file(cls, filepath: Path | str) -> list["Proxy"]:
+        return [cls.from_str(proxy) for proxy in load_lines(filepath)]
 
     @property
     def as_url(self) -> str:
@@ -105,9 +57,7 @@ class Proxy:
         return f"Proxy(ip={self.ip}, port={self.port})"
 
     def __str__(self) -> str:
-        info = f"[{self.ip:>15}:{str(self.port):<5}]"
-        if self.tags: info += f" ({', '.join((str(tag) for tag in self.tags))})"
-        return info
+        return f"[{self.ip:>15}:{str(self.port):<5}]"
 
     def __hash__(self):
         return hash((self.ip, self.port, self.protocol, self.login, self.password))
