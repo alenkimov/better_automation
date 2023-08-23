@@ -45,7 +45,7 @@ class TwitterAPI(BetterHTTPClient):
 
     def __init__(self, session: aiohttp.ClientSession, auth_token: str, *args, **kwargs):
         super().__init__(session, *args, **kwargs)
-        self.session.headers.update(self.DEFAULT_HEADERS)
+        self._headers.update(self.DEFAULT_HEADERS)
         self._auth_token = None
         self._ct0 = None
         self.set_auth_token(auth_token)
@@ -53,12 +53,12 @@ class TwitterAPI(BetterHTTPClient):
 
     def set_auth_token(self, auth_token: str):
         self._auth_token = auth_token
-        self.session.cookie_jar.update_cookies({"auth_token": auth_token})
+        self._cookies.update({"auth_token": auth_token})
 
     def set_ct0(self, ct0: str):
         self._ct0 = ct0
-        self.session.headers["x-csrf-token"] = ct0
-        self.session.cookie_jar.update_cookies({"ct0": ct0})
+        self._cookies.update({"ct0": ct0})
+        self._headers.update({"x-csrf-token": ct0})
 
     @property
     def auth_token(self) -> str | None:

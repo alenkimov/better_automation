@@ -11,7 +11,7 @@ class BetterHTTPClient:
             headers: LooseHeaders = None,
             useragent: str = None,
     ):
-        self.session = session
+        self.__session = session
         self._cookies = {}
         self._headers = headers or {}
 
@@ -26,7 +26,7 @@ class BetterHTTPClient:
             headers.update(kwargs.pop("headers"))
         if "cookies" in kwargs:
             cookies.update(kwargs.pop("cookies"))
-        return await self.session._request(
+        return await self.__session._request(
             method,
             url,
             headers=headers,
@@ -35,4 +35,4 @@ class BetterHTTPClient:
         )
 
     def set_useragent(self, useragent: str):
-        self.session.headers.update({'user-agent': useragent})
+        self.__session.headers.update({'user-agent': useragent})

@@ -14,13 +14,13 @@ class DiscordAPI(BetterHTTPClient):
 
     def __init__(self, session: aiohttp.ClientSession, auth_token: str, *args, **kwargs):
         super().__init__(session, *args, **kwargs)
-        self.session.headers.update(self.DEFAULT_HEADERS)
+        self._headers.update(self.DEFAULT_HEADERS)
         self._auth_token = None
         self.set_auth_token(auth_token)
 
     def set_auth_token(self, auth_token: str):
         self._auth_token = auth_token
-        self.session.headers.update({"authorization": auth_token})
+        self._headers.update({"authorization": auth_token})
 
     @property
     def auth_token(self) -> str | None:
