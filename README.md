@@ -18,33 +18,46 @@ import aiohttp
 from better_automation import TwitterAPI
 
 
+TWITTER_BIND_DATA = {
+    'response_type': 'code',
+    'client_id': 'aTk5eEUxZlpvak1RYU9yTEZhZ0M6MTpjaQ',
+    'scope': 'tweet.read users.read follows.read like.read offline.access',
+    'code_challenge': 'challenge',
+    'code_challenge_method': 'plain',
+    'redirect_uri': 'https://taskon.xyz/twitter',
+    'state': '0058371f-41cf-11ee-9397-7e1ed119aa82',
+}
+
+
 async def twitter_demo():
     async with aiohttp.ClientSession() as session:
-        twitter = TwitterAPI(session, "auth_token")
-        
+        twitter = TwitterAPI(session, "97392cb6e659ce9602d42b2698015f1cb1008de2")
         # Запрашиваем имя пользователя
         username = await twitter.request_username()
         print(f"Your username: {username}")
-        
+
         # Подписываемся на Илона Маска
         user_handle = "@elonmusk"
         user_id = await twitter.request_user_id(user_handle)
         print(f"{user_handle} is followed: {await twitter.follow(user_id)}")
-        
+
         # Загружаем твит с аниме девочкой
         img_url = "https://cdn.donmai.us/original/26/cd/__chloe_von_einzbern_fate_and_1_more_drawn_by_anzu_ame__26cdf525d657a8c14cc8758160bc6284.jpg"
         media_id = await twitter.upload_image(img_url)
         print(f"Media id: {media_id}")
         tweet_id = await twitter.tweet("I love YOU!!!!", media_id=media_id)
         print(f"Tweet {tweet_id} is pinned: {await twitter.pin_tweet(tweet_id)}")
-        
+
         # Запрашиваем информацию о твите
         tweet_data = await twitter.request_tweet_data(tweet_id)
         print(tweet_data)
-        
+
         # Ретвит, лайк, реплай
         another_tweet_id = 1692431667548528661
         print(f"Tweet {another_tweet_id} is retweeted. Tweet id: {await twitter.retweet(another_tweet_id)}")
         print(f"Tweet {another_tweet_id} is liked: {await twitter.like(another_tweet_id)}")
         print(f"Tweet {another_tweet_id} is replied. Reply id: {await twitter.reply(another_tweet_id, 'I love YOU!!!')}")
+
+        bind_code = await twitter.bind_app(**TWITTER_BIND_DATA)
+        print(f"Bind code: {bind_code}")
 ```

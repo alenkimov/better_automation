@@ -123,6 +123,7 @@ class TwitterAPI(BetterHTTPClient):
             client_id: str,
             code_challenge: str,
             state: str,
+            redirect_uri: str,
             code_challenge_method: str = "plain",
             scope: str = "tweet.read users.read follows.read offline.access like.read",
             response_type: str = "code",
@@ -135,6 +136,7 @@ class TwitterAPI(BetterHTTPClient):
             "state": state,
             "scope": scope,
             "response_type": response_type,
+            "redirect_uri": redirect_uri,
         }
         response = await self.request("GET", url, params=querystring)
         data = await response.json()
