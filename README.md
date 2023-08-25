@@ -17,47 +17,85 @@ More libraries of the family:
 import aiohttp
 from better_automation import TwitterAPI
 
-
-TWITTER_BIND_DATA = {
-    'response_type': 'code',
-    'client_id': 'aTk5eEUxZlpvak1RYU9yTEZhZ0M6MTpjaQ',
-    'scope': 'tweet.read users.read follows.read like.read offline.access',
-    'code_challenge': 'challenge',
-    'code_challenge_method': 'plain',
-    'redirect_uri': 'https://taskon.xyz/twitter',
-    'state': '0058371f-41cf-11ee-9397-7e1ed119aa82',
-}
-
-
 async def twitter_demo():
     async with aiohttp.ClientSession() as session:
-        twitter = TwitterAPI(session, "97392cb6e659ce9602d42b2698015f1cb1008de2")
+        twitter = TwitterAPI(session, "auth_token")
         # Запрашиваем имя пользователя
         username = await twitter.request_username()
         print(f"Your username: {username}")
 
-        # Подписываемся на Илона Маска
-        user_handle = "@elonmusk"
-        user_id = await twitter.request_user_id(user_handle)
-        print(f"{user_handle} is followed: {await twitter.follow(user_id)}")
+        # Запрашиваем свой user_id
+        user_id = await twitter.request_user_id(username)
+        print(f"Your user id: {user_id}")
 
-        # Загружаем твит с аниме девочкой
-        img_url = "https://cdn.donmai.us/original/26/cd/__chloe_von_einzbern_fate_and_1_more_drawn_by_anzu_ame__26cdf525d657a8c14cc8758160bc6284.jpg"
+        # Запрашиваем первых трех подписчиков
+        followers = await twitter.request_followers(user_id, count=3)
+        print("Your followers:")
+        for user_id, username in followers.items():
+            print(f"\t@{username} ({user_id})")
+
+        # Загружаем изображение с Хитори на сервер
+        img_url = "https://cdn.donmai.us/sample/d8/c1/__gotoh_hitori_bocchi_the_rock_drawn_by_pigbone_cafe__sample-d8c1495c647769dfe34c697a17e91196.jpg"
         media_id = await twitter.upload_image(img_url)
         print(f"Media id: {media_id}")
+
+        # Ставим банер
+        print(f"Banner is changed: {await twitter.update_profile_banner(media_id)}!")
+
+        # Ставим аватарку
+        print(f"Avatar is changed: {await twitter.update_profile_avatar(media_id)}!")
+
+        # Меняем имя и год рождения (год рождения нужно менять обязательно)
+        print(f"Name is changed: {await twitter.update_profile(1, 1, 2002, name='Hitori Gotoh')}")
+
+        # Выражаем нашу любовь к Хитори через твит с ее изображением
         tweet_id = await twitter.tweet("I love YOU!!!!", media_id=media_id)
+        print(f"Tweeted: {tweet_id}")
+
+        # Закрепляем твит
         print(f"Tweet {tweet_id} is pinned: {await twitter.pin_tweet(tweet_id)}")
 
-        # Запрашиваем информацию о твите
-        tweet_data = await twitter.request_tweet_data(tweet_id)
-        print(tweet_data)
+        # Запрашиваем информацию о твите (пока что возвращает все данные, поэтому метод приватный)
+        # tweet_data = await twitter._request_tweet_data(tweet_id)
+        # pprint(tweet_data)
 
-        # Ретвит, лайк, реплай
-        another_tweet_id = 1692431667548528661
-        print(f"Tweet {another_tweet_id} is retweeted. Tweet id: {await twitter.retweet(another_tweet_id)}")
+        another_tweet_id = 1694061696187335072
+
+        # Лайк
         print(f"Tweet {another_tweet_id} is liked: {await twitter.like(another_tweet_id)}")
-        print(f"Tweet {another_tweet_id} is replied. Reply id: {await twitter.reply(another_tweet_id, 'I love YOU!!!')}")
 
-        bind_code = await twitter.bind_app(**TWITTER_BIND_DATA)
+        # Репост (ретвит)
+        print(f"Tweet {another_tweet_id} is retweeted. Tweet id: {await twitter.repost(another_tweet_id)}")
+
+        # Коммент (реплай)
+        print(f"Tweet {another_tweet_id} is replied. Reply id: {await twitter.reply(another_tweet_id, 'tem razão')}")
+        
+        bind_data = {
+            'response_type': 'code',
+            'client_id': 'aTk5eEUxZlpvak1RYU9yTEZhZ0M6MTpjaQ',
+            'scope': 'tweet.read users.read follows.read like.read offline.access',
+            'code_challenge': 'challenge',
+            'code_challenge_method': 'plain',
+            'redirect_uri': 'https://taskon.xyz/twitter',
+            'state': '0058371f-41cf-11ee-9397-7e1ed119aa82',
+        }
+        
+        # Привязка приложения
+        bind_code = await twitter.bind_app(**bind_data)
         print(f"Bind code: {bind_code}")
+
+        # Запрашиваем id Илона Маска
+        user_handle = "@elonmusk"
+        elonmusk = await twitter.request_user_id(user_handle)
+
+        # Подписываемся на Илона Маска
+        print(f"{user_handle} is followed: {await twitter.follow(elonmusk)}")
+
+        # Отписываемся от Илона Маска
+        print(f"{user_handle} is unfollowed: {await twitter.unfollow(elonmusk)}")
+
+        tweet_url = 'https://twitter.com/CreamIce_Cone/status/1691735090529976489'
+        # Цитата (Quote tweet)
+        quote_tweet_id = await twitter.quote(tweet_url, 'oh..')
+        print(f"Quoted! Tweet id: {quote_tweet_id}")
 ```
