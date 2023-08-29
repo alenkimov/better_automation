@@ -44,11 +44,11 @@ class AnticaptchaClient:
             task_data: dict,
             *,
             proxy: str = None,
-            user_agent: str = None,
+            useragent: str = None,
             cookies: str = None,
     ) -> int:
-        if proxy and not user_agent:
-            raise ValueError(f"Because you use proxy an user_agent is required")
+        if proxy and not useragent:
+            raise ValueError(f"Because you use proxy a useragent is required")
 
         if proxy:
             parsed_url = urlparse(proxy)
@@ -64,7 +64,7 @@ class AnticaptchaClient:
                 "proxyLogin": proxy_login,
                 "proxyPassword": proxy_password,
             })
-        if user_agent: task_data.update({"userAgent": user_agent})
+        if useragent: task_data.update({"userAgent": useragent})
         if cookies: task_data.update({"cookies": cookies})
 
         response = await self.request("createTask", {"task": task_data})
