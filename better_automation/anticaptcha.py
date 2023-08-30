@@ -9,8 +9,6 @@ class AnticaptchaError(Exception):
 
 class AnticaptchaClient:
     BASE_URL = "https://api.anti-captcha.com"
-    DEFAULT_HEADERS = {"Content-Type": "application/json",
-                       "Accept": "application/json"}
 
     def __init__(self, session: aiohttp.ClientSession, api_key: str):
         self._session = session
@@ -21,13 +19,11 @@ class AnticaptchaClient:
         url = f"{self.BASE_URL}/{method}"
         payload = payload.copy() if payload else {}
         payload.update({"clientKey": self.api_key})
-        print(f"Request data: {method} {payload}")
         return await self._session.request("POST", url, json=payload)
 
     @staticmethod
     async def handle_response(response: aiohttp.ClientResponse) -> dict:
         data = await response.json()
-        print(f"Answer: {data}")
         if data == 0:
             raise AnticaptchaError
         if data["errorId"] != 0:
@@ -43,33 +39,36 @@ class AnticaptchaClient:
             self,
             task_data: dict,
             *,
-            proxy: str = None,
-            useragent: str = None,
             cookies: str = None,
     ) -> int:
-        if proxy and not useragent:
-            raise ValueError(f"Because you use proxy a useragent is required")
-
-        if proxy:
-            parsed_url = urlparse(proxy)
-            proxy_type = parsed_url.scheme
-            proxy_address = parsed_url.hostname
-            proxy_port = parsed_url.port
-            proxy_login = parsed_url.username
-            proxy_password = parsed_url.password
-            task_data.update({
-                "proxyType": proxy_type,
-                "proxyAddress": proxy_address,
-                "proxyPort": proxy_port,
-                "proxyLogin": proxy_login,
-                "proxyPassword": proxy_password,
-            })
-        if useragent: task_data.update({"userAgent": useragent})
         if cookies: task_data.update({"cookies": cookies})
-
         response = await self.request("createTask", {"task": task_data})
         data = await self.handle_response(response)
         return data["taskId"]
+
+    async def create_task_with_proxy(
+            self,
+            task_data: dict,
+            proxy: str,
+            useragent: str,
+            *,
+            cookies: str = None,
+    ) -> int:
+        parsed_url = urlparse(proxy)
+        proxy_type = parsed_url.scheme
+        proxy_address = parsed_url.hostname
+        proxy_port = parsed_url.port
+        proxy_login = parsed_url.username
+        proxy_password = parsed_url.password
+        task_data.update({
+            "proxyType": proxy_type,
+            "proxyAddress": proxy_address,
+            "proxyPort": proxy_port,
+            "proxyLogin": proxy_login,
+            "proxyPassword": proxy_password,
+        })
+        task_data.update({"userAgent": useragent})
+        return await self.create_task(task_data, cookies=cookies)
 
     async def wait_for_result(
             self,
@@ -108,9 +107,8 @@ class AnticaptchaClient:
             recaptcha_data_s: str = None,
             **kwargs,
     ) -> str:
-        task_type = "RecaptchaV2Task" if "proxy" in kwargs else "RecaptchaV2TaskProxyless"
         task_data = {
-            "type": task_type,
+            "type": "RecaptchaV2TaskProxyless",
             "websiteURL": url,
             "websiteKey": site_key,
             "isInvisible": is_invisible,
@@ -118,5 +116,28 @@ class AnticaptchaClient:
         if recaptcha_data_s:
             task_data["recaptchaDataSValue"] = recaptcha_data_s
         task_id = await self.create_task(task_data, **kwargs)
+        data = await self.wait_for_result(task_id)
+        return data["solution"]["gRecaptchaResponse"]
+
+    async def recaptcha_v2_with_proxy(
+            self,
+            url: str,
+            site_key: str,
+            *,
+            proxy: str,
+            useragent: str,
+            is_invisible: bool = False,
+            recaptcha_data_s: str = None,
+            **kwargs,
+    ) -> str:
+        task_data = {
+            "type": "RecaptchaV2Task",
+            "websiteURL": url,
+            "websiteKey": site_key,
+            "isInvisible": is_invisible,
+        }
+        if recaptcha_data_s:
+            task_data["recaptchaDataSValue"] = recaptcha_data_s
+        task_id = await self.create_task_with_proxy(task_data, proxy, useragent, **kwargs)
         data = await self.wait_for_result(task_id)
         return data["solution"]["gRecaptchaResponse"]
