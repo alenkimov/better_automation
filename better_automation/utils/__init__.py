@@ -10,6 +10,9 @@ from .file import (
 from .other import (
     curry_async,
 )
+from .generate import (
+    generate_nickname,
+)
 
 
 __all__ = [
@@ -21,4 +24,5 @@ __all__ = [
     "write_json",
     "to_json",
     "curry_async",
+    "generate_nickname",
 ]
