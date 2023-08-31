@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "better-automation"
-version = "0.4.2"
+version = "0.5.0"
 description = "Site automation tools"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
