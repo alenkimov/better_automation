@@ -1,6 +1,8 @@
 import asyncio
 from urllib.parse import urlparse
+
 import aiohttp
+import pyuseragents
 
 
 class AnticaptchaError(Exception):
@@ -10,15 +12,22 @@ class AnticaptchaError(Exception):
 class AnticaptchaClient:
     BASE_URL = "https://api.anti-captcha.com"
 
-    def __init__(self, session: aiohttp.ClientSession, api_key: str):
+    def __init__(self, session: aiohttp.ClientSession, api_key: str, *, proxy: str = None, useragent: str = None):
         self._session = session
-        self.api_key = api_key
-        self.is_invisible = 0
+        self._api_key = api_key
+        self._proxy = proxy
+        self._useragent = useragent
+
+        if self._useragent is None:
+            self.set_useragent(pyuseragents.random())
+
+    def set_useragent(self, useragent: str):
+        self._useragent = useragent
 
     async def _request(self, method: str, payload: dict = None):
         url = f"{self.BASE_URL}/{method}"
         payload = payload.copy() if payload else {}
-        payload.update({"clientKey": self.api_key})
+        payload.update({"clientKey": self._api_key})
         return await self._session.request("POST", url, json=payload)
 
     @staticmethod
@@ -43,7 +52,10 @@ class AnticaptchaClient:
             useragent: str = None,
             cookies: str = None,
     ) -> int:
-        if proxy:
+        proxy = proxy or self._proxy
+        useragent = useragent or self._useragent
+
+        if proxy and useragent:
             parsed_url = urlparse(proxy)
             proxy_type = parsed_url.scheme
             proxy_address = parsed_url.hostname
@@ -56,8 +68,8 @@ class AnticaptchaClient:
                 "proxyPort": proxy_port,
                 "proxyLogin": proxy_login,
                 "proxyPassword": proxy_password,
+                "userAgent": useragent,
             })
-        if useragent: task_data.update({"userAgent": useragent})
         if cookies: task_data.update({"cookies": cookies})
         response = await self._request("createTask", {"task": task_data})
         data = await self._handle_response(response)
@@ -102,7 +114,7 @@ class AnticaptchaClient:
             recaptcha_data_s: str = None,
             **kwargs,
     ) -> str:
-        task_type = "RecaptchaV2Task" if "proxy" in kwargs else "RecaptchaV2TaskProxyless"
+        task_type = "RecaptchaV2Task" if kwargs.get("proxy") is not None else "RecaptchaV2TaskProxyless"
         task_data = {
             "isInvisible": is_invisible,
         }
@@ -116,7 +128,7 @@ class AnticaptchaClient:
             site_key: str,
             **kwargs,
     ) -> str:
-        task_type = "HCaptchaTask" if "proxy" in kwargs else "HCaptchaTaskProxyless"
+        task_type = "HCaptchaTask" if kwargs.get("proxy") is not None else "HCaptchaTaskProxyless"
         return await self._recaptcha_task(task_type, url, site_key, **kwargs)
 
     async def _report_incorrect_captcha(self, task_id, report_method: str):
