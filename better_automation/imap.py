@@ -50,7 +50,11 @@ class ProxyIMAPClient(IMAP4_SSL):
     async def get_messages_from_folders(self, folders: Iterable[str]) -> dict[str: list[Message]]:
         messages = defaultdict(list)
         for folder in folders:
-            await self.select(folder)
+            result, data = await self.select(folder)
+            if result != 'OK':
+                # print(f"Failed to select folder {folder}: {data}")
+                continue
+
             result, data = await self.search("ALL")
             if result == 'OK':
                 for number_bytes in data[0].split():
@@ -58,4 +62,8 @@ class ProxyIMAPClient(IMAP4_SSL):
                     result, data = await self.fetch(number, '(RFC822)')
                     if result == 'OK':
                         messages[folder].append(email.message_from_bytes(data[1]))
+            else:
+                # print(f"SEARCH command failed in folder {folder}: {data}")
+                pass
+
         return messages

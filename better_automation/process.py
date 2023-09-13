@@ -7,7 +7,7 @@ from aiohttp_socks import ProxyConnector
 from .utils.other import bounded_gather
 
 
-async def _process_accounts_with_session(
+async def process_accounts_with_session(
         accounts: Iterable,
         fn: Callable,
         *,
@@ -19,7 +19,7 @@ async def _process_accounts_with_session(
             await fn(session, account)
 
 
-async def process_accounts_with_session(
+async def process_accounts_and_proxies_with_session(
         accounts: Iterable,
         proxies: Iterable[str],
         fn: Callable,
@@ -33,5 +33,5 @@ async def process_accounts_with_session(
             proxy_to_accounts[proxy].append(account)
     else:
         proxy_to_accounts[None] = list(accounts)
-    tasks = [_process_accounts_with_session(accounts, fn, proxy=proxy) for proxy, accounts in proxy_to_accounts.items()]
+    tasks = [process_accounts_with_session(accounts, fn, proxy=proxy) for proxy, accounts in proxy_to_accounts.items()]
     await bounded_gather(tasks, max_tasks)
