@@ -40,7 +40,6 @@ class TwitterAPI(BetterHTTPClient):
         'CreateRetweet': "ojPdsZsimiJrUGLR1sjUtA",
         'FavoriteTweet': "lI07N6Otwv1PhnEgXILM7A",
         'UnfavoriteTweet': "ZYKSe-w7KEslx3JhSIk5LA",
-        # 'CreateTweet': "GUFG748vuvmewdXbB5uPKg",  # OLD
         'CreateTweet': "SoVnbfCycZ7fERGCwpZkYA",
         'TweetResultByRestId': "V3vfsYzNEyD9tsf4xoFRgw",
         'ModerateTweet': "p'jF:GVqCjTcZol0xcBJjw",
@@ -356,6 +355,19 @@ class TwitterAPI(BetterHTTPClient):
             payload['variables']['media']['media_entities'].append({'media_id': str(media_id), 'tagged_users': []})
 
         response, data = await self.request("POST", url, json=payload)
+        return data
+
+    @_ensure_ct0
+    async def _vote(self, tweet_id: int | str, card_id: int | str, choice_number: int):
+        url = "https://caps.twitter.com/v2/capi/passthrough/1"
+        params = {
+            "twitter:string:card_uri": f"card://{card_id}",
+            "twitter:long:original_tweet_id": str(tweet_id),
+            "twitter:string:response_card_name": "poll2choice_text_only",
+            "twitter:string:cards_platform": "Web-12",
+            "twitter:string:selected_choice": str(choice_number),
+        }
+        response, data = await self.request("POST", url, params=params)
         return data
 
     @_ensure_ct0

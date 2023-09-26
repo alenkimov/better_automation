@@ -1,3 +1,5 @@
+from urllib.parse import urlparse, parse_qs
+
 import aiohttp
 
 from ..http import BetterHTTPClient
@@ -44,5 +46,18 @@ class DiscordAPI(BetterHTTPClient):
         }
         response = await self.request("POST", url, json=payload, params=querystring)
         data = await response.json()
-        code = data["location"].split("=")[1]
+
+        bind_url = data.get("location")
+        if bind_url is None:
+            raise ValueError(f"Response data doesn't contain a bind url."
+                             f"\n\tResponse data: {data}")
+
+        parsed_url = urlparse(bind_url)
+        query = parse_qs(parsed_url.query)
+        code = query.get("code", [None])[0]
+
+        if code is None:
+            raise ValueError(f"Bind url doesn't contain a bind code."
+                             f"\n\tBind url: '{bind_url}'")
+
         return code
