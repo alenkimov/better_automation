@@ -1,4 +1,4 @@
-from . import utils, anticaptcha
+from . import utils
 from .discord import DiscordAPI
 from .twitter import TwitterAPI
 from .http import BetterHTTPClient
@@ -11,5 +11,4 @@ __all__ = [
     "TwitterAPI",
     "BetterHTTPClient",
     "ProxyIMAPClient",
-    "anticaptcha",
 ]
