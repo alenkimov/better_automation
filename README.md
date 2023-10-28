@@ -20,10 +20,16 @@ from better_automation import TwitterAPI
 async def twitter_demo():
     async with aiohttp.ClientSession() as session:
         twitter = TwitterAPI(session, "auth_token")
+        
         # Запрашиваем имя пользователя
         username = await twitter.request_username()
         print(f"Your username: {username}")
-
+        
+        # Запрашиваю различную информацию о пользователе
+        info = await twitter.request_user_info(username)
+        print(f"Всего подписчиков: {info['legacy']['followers_count']}")
+        print(f"Аккаунт создан: {info['legacy']['created_at']}")
+        
         # Запрашиваем свой user_id
         user_id = await twitter.request_user_id(username)
         print(f"Your user id: {user_id}")

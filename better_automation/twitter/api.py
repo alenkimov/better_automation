@@ -18,6 +18,12 @@ from ..http import BetterHTTPClient
 from ..utils import to_json
 
 
+def _username_to_screen_name(username) -> str:
+    if username.startswith("@"):
+        return username[1:]
+    return username
+
+
 class TwitterAPI(BetterHTTPClient):
     DEFAULT_HEADERS = {
         'authority': 'twitter.com',
@@ -172,6 +178,36 @@ class TwitterAPI(BetterHTTPClient):
     async def _request_user_id(self, screen_name: str) -> dict:
         url, query_id = self._action_to_url('ProfileSpotlightsQuery')
         params = {'variables': to_json({"screen_name": screen_name})}
+        response, data = await self.request("GET", url, params=params)
+        return data
+
+    @_ensure_ct0
+    async def _request_user_info(self, screen_name: str):
+        url = "https://twitter.com/i/api/graphql/G3KGOASz96M-Qu0nwmGXNg/UserByScreenName"
+        variables = {
+            "screen_name": screen_name,
+            "withSafetyModeUserFields": True,
+        }
+        features = {
+            "hidden_profile_likes_enabled": True,
+            "hidden_profile_subscriptions_enabled": True,
+            "responsive_web_graphql_exclude_directive_enabled": True,
+            "verified_phone_label_enabled": False,
+            "subscriptions_verification_info_is_identity_verified_enabled": True,
+            "subscriptions_verification_info_verified_since_enabled": True,
+            "highlights_tweets_tab_ui_enabled": True,
+            "creator_subscriptions_tweet_preview_api_enabled": True,
+            "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
+            "responsive_web_graphql_timeline_navigation_enabled": True,
+        }
+        field_toggles = {
+            "withAuxiliaryUserLabels": False,
+        }
+        params = {
+            "variables": to_json(variables),
+            "features": to_json(features),
+            "fieldToggles": to_json(field_toggles),
+        }
         response, data = await self.request("GET", url, params=params)
         return data
 
@@ -569,11 +605,15 @@ class TwitterAPI(BetterHTTPClient):
         return media_id
 
     async def request_user_id(self, username: str) -> int:
-        if username.startswith("@"):
-            username = username[1:]
-        data = await self._request_user_id(username)
+        screen_name = _username_to_screen_name(username)
+        data = await self._request_user_id(screen_name)
         user_id = data['data']['user_result_by_screen_name']['result']['rest_id']
         return int(user_id)
+
+    async def request_user_info(self, username: str) -> dict:
+        screen_name = _username_to_screen_name(username)
+        data = await self._request_user_info(screen_name)
+        return data['data']['user']['result']
 
     async def follow(self, user_id: str | int) -> bool:
         data = await self._follow(user_id)
