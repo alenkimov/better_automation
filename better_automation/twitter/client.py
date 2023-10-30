@@ -1,11 +1,15 @@
-from functools import wraps
+import asyncio
+import time
+from enum import Enum
+import re
+from typing import Any
 
 import aiohttp
 from aiohttp import MultipartWriter
-from aiohttp.client_exceptions import ContentTypeError
+import pyuseragents
 
+from async_lru import alru_cache
 from .errors import (
-    TwitterAPIException,
     HTTPException,
     BadRequest,
     Unauthorized,
@@ -14,17 +18,34 @@ from .errors import (
     TooManyRequests,
     TwitterServerError,
 )
-from ..http import BetterHTTPClient
 from ..utils import to_json
 
+async_cache = alru_cache(maxsize=None)
 
-def _username_to_screen_name(username) -> str:
+AUTH_TOKEN_PATTERN = re.compile(r'^[a-f0-9]{40}$')
+
+
+def is_valid_auth_token(auth_token: str) -> bool:
+    return bool(AUTH_TOKEN_PATTERN.match(auth_token))
+
+
+def username_to_screen_name(username) -> str:
     if username.startswith("@"):
         return username[1:]
     return username
 
 
-class TwitterAPI(BetterHTTPClient):
+class TwitterStatus(Enum):
+    BAD_TOKEN = "BAD_TOKEN"
+    UNKNOWN = "UNKNOWN"
+    BANNED = "BANNED"
+    LOCKED = "LOCKED"
+    GOOD = "GOOD"
+
+
+class TwitterClient:
+    """TwitterAccount + TwitterAPI = TwitterClient"""
+
     DEFAULT_HEADERS = {
         'authority': 'twitter.com',
         'accept': '*/*',
@@ -55,60 +76,8 @@ class TwitterAPI(BetterHTTPClient):
         'ProfileSpotlightsQuery': '9zwVLJ48lmVUk8u_Gh9DmA',
         'Following': 't-BPOrMIduGUJWO_LxcvNQ',
         'Followers': '3yX7xr2hKjcZYnXt6cU6lQ',
+        'UserByScreenName': 'G3KGOASz96M-Qu0nwmGXNg',
     }
-
-    def __init__(self, session: aiohttp.ClientSession, auth_token: str, ct0: str = None, *args, **kwargs):
-        super().__init__(session, *args, **kwargs)
-        self._headers.update(self.DEFAULT_HEADERS)
-        self._auth_token = None
-        self._ct0 = None
-        self.set_auth_token(auth_token)
-        self.set_ct0(ct0 if ct0 else '')
-
-    def set_auth_token(self, auth_token: str):
-        self._auth_token = auth_token
-        self._cookies.update({"auth_token": auth_token})
-
-    def set_ct0(self, ct0: str):
-        self._ct0 = ct0
-        self._cookies.update({"ct0": ct0})
-        self._headers.update({"x-csrf-token": ct0})
-
-    @property
-    def auth_token(self) -> str | None:
-        return self._auth_token
-
-    @property
-    def ct0(self) -> str | None:
-        return self._ct0
-
-    async def request(self, *args, **kwargs) -> tuple[aiohttp.ClientResponse, dict | None]:
-        response = await super().request(*args, **kwargs)
-
-        try:
-            response_json = await response.json()
-        except aiohttp.client_exceptions.ContentTypeError:
-            response_json = None
-
-        if response.status == 400:
-            raise BadRequest(response, response_json)
-        if response.status == 401:
-            raise Unauthorized(response, response_json)
-        if response.status == 403:
-            raise Forbidden(response, response_json)
-        if response.status == 404:
-            raise NotFound(response, response_json)
-        if response.status == 429:
-            raise TooManyRequests(response, response_json)
-        if response.status >= 500:
-            raise TwitterServerError(response, response_json)
-        if not 200 <= response.status < 300:
-            raise HTTPException(response, response_json)
-
-        if response_json and "errors" in response_json:
-            raise HTTPException(response, response_json)
-
-        return response, response_json
 
     @classmethod
     def _action_to_url(cls, action: str) -> tuple[str, str]:
@@ -116,31 +85,117 @@ class TwitterAPI(BetterHTTPClient):
         query_id = cls.ACTION_TO_QUERY_ID[action]
         return f"{cls.GRAPHQL_URL}/{query_id}/{action}", query_id
 
-    async def _request_ct0(self) -> str:
-        url = 'https://twitter.com/i/api/2/oauth2/authorize'
-        try:
-            response, _ = await self.request("GET", url)
-            if "ct0" in response.cookies:
-                return response.cookies["ct0"].value
+    def __init__(
+            self,
+            auth_token: str,
+            *,
+            ct0: str = None,
+            user_agent: str = None,
+            wait_on_rate_limit: bool = True,
+    ):
+        self._auth_token = auth_token
+        self.ct0 = ct0
+        self.status: TwitterStatus = TwitterStatus.UNKNOWN
+        self.user_agent = user_agent or pyuseragents.random()
+
+        self.wait_on_rate_limit = wait_on_rate_limit
+
+        self.session = None
+
+    # @classmethod
+    # def from_cookies(
+    #         cls,
+    #         cookies: dict | str,
+    #         base64: bool = False,
+    #         *,
+    #         ct0: str = None,
+    #         user_agent: str = None,
+    #         wait_on_rate_limit: bool = True,
+    # ) -> "TwitterClient":
+    #     raise NotImplementedError
+
+    @property
+    def auth_token(self) -> str:
+        return self._auth_token
+
+    @auth_token.setter
+    def auth_token(self, value):
+        if not is_valid_auth_token(value):
+            raise ValueError("Bad Twitter auth token")
+
+        self._auth_token = value
+
+    async def request(
+            self,
+            method,
+            url,
+            params: dict = None,
+            headers: dict = None,
+            json: Any = None,
+            data: Any = None,
+    ) -> aiohttp.ClientResponse:
+        session = self.session or aiohttp.ClientSession()
+
+        cookies = {"auth_token": self._auth_token}
+        full_headers = headers or {}
+        full_headers.update(self.DEFAULT_HEADERS)
+        full_headers["user-agent"] = self.user_agent
+
+        if self.ct0:
+            cookies["ct0"] = self.ct0
+            full_headers["x-csrf-token"] = self.ct0
+
+        async with session.request(
+                method, url,
+                params=params,
+                json=json,
+                headers=full_headers,
+                cookies=cookies,
+                data=data,
+        ) as response:
+            await response.read()
+
+        if self.session is None:
+            await session.close()
+
+        if not 200 <= response.status < 300:
+            response_json = await response.json()
+        if response.status == 400:
+            raise BadRequest(response, response_json)
+        if response.status == 401:
+            exc = Unauthorized(response, response_json)
+
+            if 32 in exc.api_codes:
+                self.status = TwitterStatus.BAD_TOKEN
+
+            raise exc
+        if response.status == 403:
+            exc = Forbidden(response, response_json)
+
+            if 353 in exc.api_codes and "ct0" in response.cookies:
+                self.ct0 = response.cookies["ct0"].value
+                return await self.request(method, url, params, json)
+
+            raise exc
+        if response.status == 404:
+            raise NotFound(response, response_json)
+        if response.status == 429:
+            if self.wait_on_rate_limit:
+                reset_time = int(response.headers["x-rate-limit-reset"])
+                sleep_time = reset_time - int(time.time()) + 1
+                if sleep_time > 0:
+                    await asyncio.sleep(sleep_time)
+                return await self.request(method, url, params, json)
             else:
-                raise TwitterAPIException("Failed to obtain ct0")
-        except Forbidden as e:
-            if "ct0" in e.response.cookies:
-                return e.response.cookies["ct0"].value
-            else:
-                raise
+                raise TooManyRequests(response, response_json)
+        if response.status >= 500:
+            raise TwitterServerError(response, response_json)
+        if not 200 <= response.status < 300:
+            raise HTTPException(response, response_json)
 
-    @staticmethod
-    def _ensure_ct0(coro):
-        @wraps(coro)
-        async def wrapper(self, *args, **kwargs):
-            if not self.ct0:
-                self.set_ct0(await self._request_ct0())
-            return await coro(self, *args, **kwargs)
+        self.status = TwitterStatus.GOOD
+        return response
 
-        return wrapper
-
-    @_ensure_ct0
     async def _request_bind_code(
             self,
             client_id: str,
@@ -161,11 +216,10 @@ class TwitterAPI(BetterHTTPClient):
             "response_type": response_type,
             "redirect_uri": redirect_uri,
         }
-        response, data = await self.request("GET", url, params=querystring)
-        code = data["auth_code"]
-        return code
+        response = await self.request("GET", url, params=querystring)
+        response_json = await response.json()
+        return response_json["auth_code"]
 
-    @_ensure_ct0
     async def _confirm_binding(self, bind_code: str):
         data = {
             'approval': 'true',
@@ -174,16 +228,32 @@ class TwitterAPI(BetterHTTPClient):
         headers = {'content-type': 'application/x-www-form-urlencoded'}
         await self.request("POST", 'https://twitter.com/i/api/2/oauth2/authorize', headers=headers, data=data)
 
-    @_ensure_ct0
+    @async_cache
+    async def _request_username(self) -> dict:
+        url = 'https://api.twitter.com/1.1/account/settings.json'
+        params = {
+            'include_mention_filter': 'true',
+            'include_nsfw_user_flag': 'true',
+            'include_nsfw_admin_flag': 'true',
+            'include_ranked_timeline': 'true',
+            'include_alt_text_compose': 'true',
+            'ext': 'ssoConnections',
+            'include_country_code': 'true',
+            'include_ext_dm_nsfw_media_filter': 'true',
+            'include_ext_sharing_audiospaces_listening_data_with_followers': 'true',
+        }
+        response = await self.request("GET", url, params=params)
+        return await response.json()
+
+    @async_cache
     async def _request_user_id(self, screen_name: str) -> dict:
         url, query_id = self._action_to_url('ProfileSpotlightsQuery')
         params = {'variables': to_json({"screen_name": screen_name})}
-        response, data = await self.request("GET", url, params=params)
-        return data
+        response = await self.request("GET", url, params=params)
+        return await response.json()
 
-    @_ensure_ct0
     async def _request_user_info(self, screen_name: str):
-        url = "https://twitter.com/i/api/graphql/G3KGOASz96M-Qu0nwmGXNg/UserByScreenName"
+        url, query_id = self._action_to_url('UserByScreenName')
         variables = {
             "screen_name": screen_name,
             "withSafetyModeUserFields": True,
@@ -208,22 +278,20 @@ class TwitterAPI(BetterHTTPClient):
             "features": to_json(features),
             "fieldToggles": to_json(field_toggles),
         }
-        response, data = await self.request("GET", url, params=params)
-        return data
+        response = await self.request("GET", url, params=params)
+        return await response.json()
 
-    @_ensure_ct0
     async def _upload_image_init(self, total_bytes) -> dict:
         params = {
             'command': 'INIT',
             'total_bytes': total_bytes,
             'media_type': 'image/jpeg',
-            'media_category': 'tweet_image',
+            # 'media_category': 'tweet_image',
         }
-        response, data = await self.request("POST", 'https://upload.twitter.com/i/media/upload.json', params=params)
-        return data
+        response = await self.request("POST", 'https://upload.twitter.com/i/media/upload.json', params=params)
+        return await response.json()
 
-    @_ensure_ct0
-    async def _upload_image_append(self, media_id, image_as_bytes: bytes):
+    async def _upload_image_append(self, media_id: int, image_as_bytes: bytes):
         url = 'https://upload.twitter.com/i/media/upload.json'
         params = {
             'command': 'APPEND',
@@ -238,12 +306,12 @@ class TwitterAPI(BetterHTTPClient):
         headers = {'content-type': writer.headers['Content-Type']}
         await self.request("POST", url, headers=headers, params=params, data=writer)
 
-    @_ensure_ct0
     async def _upload_image_finalize(self, media_id):
         url = 'https://upload.twitter.com/i/media/upload.json'
         params = {
             'command': 'FINALIZE',
             'media_id': str(media_id),
+            # 'original_md5': '52fe60fa015d5fd58a4b3a98fdd4d54g',  # TODO Выяснить, что это за параметр
         }
         await self.request("POST", url, params=params)
 
@@ -254,7 +322,6 @@ class TwitterAPI(BetterHTTPClient):
         await self._upload_image_finalize(media_id)
         return media_data
 
-    @_ensure_ct0
     async def _follow_action(self, action: str, user_id: int | str):
         url = f"https://twitter.com/i/api/1.1/friendships/{action}.json"
         params = {
@@ -276,9 +343,8 @@ class TwitterAPI(BetterHTTPClient):
         headers = {
             'content-type': 'application/x-www-form-urlencoded'
         }
-        response, data = await self.request("POST", url, params=params, headers=headers)
-        # response, data = await self.request("POST", url, params=params)
-        return data
+        response = await self.request("POST", url, params=params, headers=headers)
+        return await response.json()
 
     async def _follow(self, user_id: str | int) -> dict:
         return await self._follow_action("create", user_id)
@@ -286,7 +352,6 @@ class TwitterAPI(BetterHTTPClient):
     async def _unfollow(self, user_id: str | int) -> dict:
         return await self._follow_action("destroy", user_id)
 
-    @_ensure_ct0
     async def _interact_with_tweet(self, action: str, tweet_id: int) -> dict:
         url, query_id = self._action_to_url(action)
         json_payload = {
@@ -296,8 +361,8 @@ class TwitterAPI(BetterHTTPClient):
             },
             'queryId': query_id
         }
-        response, data = await self.request("POST", url, json=json_payload)
-        return data
+        response = await self.request("POST", url, json=json_payload)
+        return await response.json()
 
     async def _repost(self, tweet_id: int) -> dict:
         return await self._interact_with_tweet('CreateRetweet', tweet_id)
@@ -308,7 +373,6 @@ class TwitterAPI(BetterHTTPClient):
     async def _unlike(self, tweet_id: int) -> dict:
         return await self._interact_with_tweet('UnfavoriteTweet', tweet_id)
 
-    @_ensure_ct0
     async def _delete_tweet(self, tweet_id: int | str) -> dict:
         url, query_id = self._action_to_url('DeleteTweet')
         json_payload = {
@@ -318,10 +382,9 @@ class TwitterAPI(BetterHTTPClient):
             },
             'queryId': query_id,
         }
-        response, data = await self.request("POST", url, json=json_payload)
-        return data
+        response = await self.request("POST", url, json=json_payload)
+        return await response.json()
 
-    @_ensure_ct0
     async def _pin_tweet(self, tweet_id: str | int) -> dict:
         url = 'https://api.twitter.com/1.1/account/pin_tweet.json'
         data = {
@@ -331,10 +394,9 @@ class TwitterAPI(BetterHTTPClient):
         headers = {
             'content-type': 'application/x-www-form-urlencoded',
         }
-        response, data = await self.request("POST", url, headers=headers, data=data)
-        return data
+        response = await self.request("POST", url, headers=headers, data=data)
+        return await response.json()
 
-    @_ensure_ct0
     async def _tweet(
             self,
             text: str = None,
@@ -390,10 +452,9 @@ class TwitterAPI(BetterHTTPClient):
         if media_id:
             payload['variables']['media']['media_entities'].append({'media_id': str(media_id), 'tagged_users': []})
 
-        response, data = await self.request("POST", url, json=payload)
-        return data
+        response = await self.request("POST", url, json=payload)
+        return await response.json()
 
-    @_ensure_ct0
     async def _vote(self, tweet_id: int | str, card_id: int | str, choice_number: int):
         url = "https://caps.twitter.com/v2/capi/passthrough/1"
         params = {
@@ -403,10 +464,9 @@ class TwitterAPI(BetterHTTPClient):
             "twitter:string:cards_platform": "Web-12",
             "twitter:string:selected_choice": str(choice_number),
         }
-        response, data = await self.request("POST", url, params=params)
-        return data
+        response = await self.request("POST", url, params=params)
+        return await response.json()
 
-    @_ensure_ct0
     async def _request_users(self, action: str, user_id: int | str, count: int) -> dict:
         url, query_id = self._action_to_url(action)
         variables = {
@@ -440,8 +500,8 @@ class TwitterAPI(BetterHTTPClient):
             'variables': to_json(variables),
             'features': to_json(features),
         }
-        response, data = await self.request("GET", url, params=params)
-        return data
+        response = await self.request("GET", url, params=params)
+        return await response.json()
 
     async def _request_followers(self, user_id: int | str, count: int) -> dict:
         return await self._request_users('Followers', user_id, count)
@@ -449,7 +509,6 @@ class TwitterAPI(BetterHTTPClient):
     async def _request_following(self, user_id: int | str, count: int) -> dict:
         return await self._request_users('Following', user_id, count)
 
-    @_ensure_ct0
     async def _request_tweet_data(self, tweet_id: int) -> dict:
         action = 'TweetDetail'
         url, query_id = self._action_to_url(action)
@@ -487,27 +546,9 @@ class TwitterAPI(BetterHTTPClient):
             'variables': to_json(variables),
             'features': to_json(features),
         }
-        response, data = await self.request("GET", url, params=params)
-        return data
+        response = await self.request("GET", url, params=params)
+        return await response.json()
 
-    @_ensure_ct0
-    async def _request_username(self) -> dict:
-        url = 'https://api.twitter.com/1.1/account/settings.json'
-        params = {
-            'include_mention_filter': 'true',
-            'include_nsfw_user_flag': 'true',
-            'include_nsfw_admin_flag': 'true',
-            'include_ranked_timeline': 'true',
-            'include_alt_text_compose': 'true',
-            'ext': 'ssoConnections',
-            'include_country_code': 'true',
-            'include_ext_dm_nsfw_media_filter': 'true',
-            'include_ext_sharing_audiospaces_listening_data_with_followers': 'true',
-        }
-        response, data = await self.request("GET", url, params=params)
-        return data
-
-    @_ensure_ct0
     async def _update_profile_image(self, type: str, media_id: str | int) -> dict:
         url = f"https://api.twitter.com/1.1/account/{type}.json"
         params = {
@@ -527,8 +568,8 @@ class TwitterAPI(BetterHTTPClient):
             'return_user': 'true',
             'media_id': str(media_id),
         }
-        response, data = await self.request("POST", url, params=params)
-        return data
+        response = await self.request("POST", url, params=params)
+        return await response.json()
 
     async def _update_profile_avatar(self, media_id: int | str) -> dict:
         return await self._update_profile_image('update_profile_image', media_id)
@@ -536,7 +577,6 @@ class TwitterAPI(BetterHTTPClient):
     async def _update_profile_banner(self, media_id: int | str) -> dict:
         return await self._update_profile_image('update_profile_banner', media_id)
 
-    @_ensure_ct0
     async def _update_profile(
             self,
             birthdate_day: int,
@@ -561,25 +601,8 @@ class TwitterAPI(BetterHTTPClient):
         if birthdate_day: params['birthdate_day'] = birthdate_day
         if birthdate_month: params['birthdate_month'] = birthdate_month
         if birthdate_year: params['birthdate_year'] = birthdate_year
-        response, data = await self.request("POST", url, params=params)
-        return data
-
-    # @_ensure_ct0
-    # async def _update_username(self, username: str) -> dict:
-    #     url = 'https://twitter.com/i/api/1.1/account/settings.json'
-    #     payload = {
-    #         'include_mention_filter': True,
-    #         'include_nsfw_user_flag': True,
-    #         'include_nsfw_admin_flag': True,
-    #         'include_ranked_timeline': True,
-    #         'include_alt_text_compose': True,
-    #         'screen_name': username,
-    #     }
-    #     headers = {
-    #         'content-type': 'application/x-www-form-urlencoded'
-    #     }
-    #     response, data = await self.request("POST", url, headers=headers, json=payload)
-    #     return data
+        response = await self.request("POST", url, params=params)
+        return await response.json()
 
     async def bind_app(
             self,
@@ -597,21 +620,20 @@ class TwitterAPI(BetterHTTPClient):
         await self._confirm_binding(bind_code)
         return bind_code
 
-    async def upload_image(self, image_url: str) -> str:
-        """Upload image by image URL. Returns media_id"""
-        image_response = await super(TwitterAPI, self).request("GET", image_url)
-        data = await self._upload_image(await image_response.read())
+    async def upload_image(self, image_bytes: bytes) -> str:
+        """Upload image as bytes. Returns media_id"""
+        data = await self._upload_image(image_bytes)
         media_id = data['media_id_string']
         return media_id
 
     async def request_user_id(self, username: str) -> int:
-        screen_name = _username_to_screen_name(username)
+        screen_name = username_to_screen_name(username)
         data = await self._request_user_id(screen_name)
         user_id = data['data']['user_result_by_screen_name']['result']['rest_id']
         return int(user_id)
 
     async def request_user_info(self, username: str) -> dict:
-        screen_name = _username_to_screen_name(username)
+        screen_name = username_to_screen_name(username)
         data = await self._request_user_info(screen_name)
         return data['data']['user']['result']
 
@@ -700,9 +722,3 @@ class TwitterAPI(BetterHTTPClient):
     async def update_profile_banner(self, media_id: int | str) -> bool:
         data = await self._update_profile_banner(media_id)
         return "id" in data
-
-    # async def update_username(self, username: str) -> bool:
-    #     if username.startswith("@"):
-    #         username = username[1:]
-    #     data = await self._update_username(username)
-    #     return data

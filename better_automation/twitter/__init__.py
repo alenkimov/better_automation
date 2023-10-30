@@ -1,7 +1,7 @@
-from .api import TwitterAPI
+from .client import TwitterClient
 from . import errors
 
 __all__ = [
-    "TwitterAPI",
+    "TwitterClient",
     "errors",
 ]

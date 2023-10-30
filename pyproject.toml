@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "better-automation"
-version = "0.6.0"
+version = "0.7.0"
 description = "Site automation tools"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
@@ -12,6 +12,7 @@ tqdm = "^4.66.1"
 pyuseragents = "^1.0.5"
 aioimaplib = "^1.0.1"
 aiohttp-socks = "^0.8.4"
+async-lru = "^2.0.4"
 
 
 [build-system]
