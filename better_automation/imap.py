@@ -7,7 +7,7 @@ from email.message import Message
 from typing import Iterable, Callable, Optional
 
 from aioimaplib import IMAP4_SSL, get_running_loop, IMAP4ClientProtocol
-from python_socks.async_.asyncio import Proxy as PythonSocksProxy
+from python_socks.async_.asyncio import Proxy
 
 
 class ProxyIMAPClient(IMAP4_SSL):
@@ -25,7 +25,7 @@ class ProxyIMAPClient(IMAP4_SSL):
     async def create_socket_through_proxy(
             self, host, port,
     ) -> socket.socket:
-        proxy = PythonSocksProxy.from_url(self.proxy)
+        proxy = Proxy.from_url(self.proxy)
         return await proxy.connect(dest_host=host, dest_port=port)
 
     def create_client(self, host: str, port: int, loop: asyncio.AbstractEventLoop,

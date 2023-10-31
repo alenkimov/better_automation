@@ -1,5 +1,5 @@
-from .api import DiscordAPI
+from .client import Client
 
 __all__ = [
-    "DiscordAPI",
+    "Client",
 ]

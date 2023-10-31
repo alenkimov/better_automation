@@ -38,6 +38,8 @@ class HTTPException(TwitterAPIException):
 
         if "error" in response_json:
             errors.append(response_json["error"])
+        else:
+            errors.append(response_json)
 
         error_text = ""
 

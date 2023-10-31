@@ -1,11 +1,10 @@
-from urllib.parse import urlparse, parse_qs
+from typing import Any
 
+from yarl import URL
 import aiohttp
 
-from ..http import BetterHTTPClient
 
-
-class DiscordAPI(BetterHTTPClient):
+class Client:
     DEFAULT_HEADERS = {
         "authority": "discord.com",
         "accept": "*/*",
@@ -14,19 +13,35 @@ class DiscordAPI(BetterHTTPClient):
         "origin": "https://discord.com",
     }
 
-    def __init__(self, session: aiohttp.ClientSession, auth_token: str, *args, **kwargs):
-        super().__init__(session, *args, **kwargs)
-        self._headers.update(self.DEFAULT_HEADERS)
-        self._auth_token = None
-        self.set_auth_token(auth_token)
+    def __init__(
+            self,
+            auth_token: str,
+            session: aiohttp.ClientSession,
+    ):
+        self.auth_token = auth_token
+        self.session = session
 
-    def set_auth_token(self, auth_token: str):
-        self._auth_token = auth_token
-        self._headers.update({"authorization": auth_token})
+    async def request(
+            self,
+            method,
+            url,
+            params: dict = None,
+            headers: dict = None,
+            json: Any = None,
+            data: Any = None,
+    ) -> aiohttp.ClientResponse:
+        full_headers = headers or {}
+        full_headers.update(self.DEFAULT_HEADERS)
+        full_headers["authorization"] = self.auth_token
 
-    @property
-    def auth_token(self) -> str | None:
-        return self._auth_token
+        return await self.session.request(
+            method,
+            url,
+            params=params,
+            json=json,
+            headers=full_headers,
+            data=data,
+        )
 
     async def bind_app(
             self,
@@ -52,9 +67,8 @@ class DiscordAPI(BetterHTTPClient):
             raise ValueError(f"Response data doesn't contain a bind url."
                              f"\n\tResponse data: {data}")
 
-        parsed_url = urlparse(bind_url)
-        query = parse_qs(parsed_url.query)
-        code = query.get("code", [None])[0]
+        bind_url = URL(bind_url)
+        code = bind_url.query.get("code")
 
         if code is None:
             raise ValueError(f"Bind url doesn't contain a bind code."

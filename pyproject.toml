@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "better-automation"
-version = "0.7.0"
-description = "Site automation tools"
+version = "1.0.0"
+description = "Unofficial Twitter and Discord API"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
 packages = [{include = "better_automation"}]

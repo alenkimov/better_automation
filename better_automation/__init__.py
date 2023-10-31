@@ -1,14 +1,9 @@
-from . import utils
-from .discord import DiscordAPI
-from .twitter import TwitterClient
-from .http import BetterHTTPClient
-from .imap import ProxyIMAPClient
+from . import utils, twitter, discord, imap
 
 
 __all__ = [
     "utils",
-    "DiscordAPI",
-    "TwitterClient",
-    "BetterHTTPClient",
-    "ProxyIMAPClient",
+    "twitter",
+    "discord",
+    "imap",
 ]

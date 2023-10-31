@@ -1,14 +1,12 @@
 import asyncio
 import time
-from enum import Enum
-import re
 from typing import Any
 
 import aiohttp
 from aiohttp import MultipartWriter
-import pyuseragents
 
 from async_lru import alru_cache
+
 from .errors import (
     HTTPException,
     BadRequest,
@@ -19,14 +17,9 @@ from .errors import (
     TwitterServerError,
 )
 from ..utils import to_json
+from .account import Account, AccountStatus
 
 async_cache = alru_cache(maxsize=None)
-
-AUTH_TOKEN_PATTERN = re.compile(r'^[a-f0-9]{40}$')
-
-
-def is_valid_auth_token(auth_token: str) -> bool:
-    return bool(AUTH_TOKEN_PATTERN.match(auth_token))
 
 
 def username_to_screen_name(username) -> str:
@@ -35,17 +28,7 @@ def username_to_screen_name(username) -> str:
     return username
 
 
-class TwitterStatus(Enum):
-    BAD_TOKEN = "BAD_TOKEN"
-    UNKNOWN = "UNKNOWN"
-    BANNED = "BANNED"
-    LOCKED = "LOCKED"
-    GOOD = "GOOD"
-
-
-class TwitterClient:
-    """TwitterAccount + TwitterAPI = TwitterClient"""
-
+class Client:
     DEFAULT_HEADERS = {
         'authority': 'twitter.com',
         'accept': '*/*',
@@ -87,43 +70,14 @@ class TwitterClient:
 
     def __init__(
             self,
-            auth_token: str,
+            account: Account,
+            session: aiohttp.ClientSession,
             *,
-            ct0: str = None,
-            user_agent: str = None,
             wait_on_rate_limit: bool = True,
     ):
-        self._auth_token = auth_token
-        self.ct0 = ct0
-        self.status: TwitterStatus = TwitterStatus.UNKNOWN
-        self.user_agent = user_agent or pyuseragents.random()
-
+        self.account = account
+        self.session = session
         self.wait_on_rate_limit = wait_on_rate_limit
-
-        self.session = None
-
-    # @classmethod
-    # def from_cookies(
-    #         cls,
-    #         cookies: dict | str,
-    #         base64: bool = False,
-    #         *,
-    #         ct0: str = None,
-    #         user_agent: str = None,
-    #         wait_on_rate_limit: bool = True,
-    # ) -> "TwitterClient":
-    #     raise NotImplementedError
-
-    @property
-    def auth_token(self) -> str:
-        return self._auth_token
-
-    @auth_token.setter
-    def auth_token(self, value):
-        if not is_valid_auth_token(value):
-            raise ValueError("Bad Twitter auth token")
-
-        self._auth_token = value
 
     async def request(
             self,
@@ -133,19 +87,16 @@ class TwitterClient:
             headers: dict = None,
             json: Any = None,
             data: Any = None,
-    ) -> aiohttp.ClientResponse:
-        session = self.session or aiohttp.ClientSession()
-
-        cookies = {"auth_token": self._auth_token}
+    ) -> tuple[aiohttp.ClientResponse, Any]:
+        cookies = {"auth_token": self.account.auth_token}
         full_headers = headers or {}
         full_headers.update(self.DEFAULT_HEADERS)
-        full_headers["user-agent"] = self.user_agent
 
-        if self.ct0:
-            cookies["ct0"] = self.ct0
-            full_headers["x-csrf-token"] = self.ct0
+        if self.account.ct0:
+            cookies["ct0"] = self.account.ct0
+            full_headers["x-csrf-token"] = self.account.ct0
 
-        async with session.request(
+        async with self.session.request(
                 method, url,
                 params=params,
                 json=json,
@@ -155,26 +106,29 @@ class TwitterClient:
         ) as response:
             await response.read()
 
-        if self.session is None:
-            await session.close()
+        response_json = await response.json()
 
-        if not 200 <= response.status < 300:
-            response_json = await response.json()
         if response.status == 400:
             raise BadRequest(response, response_json)
         if response.status == 401:
             exc = Unauthorized(response, response_json)
 
             if 32 in exc.api_codes:
-                self.status = TwitterStatus.BAD_TOKEN
+                self.account.status = AccountStatus.BAD_TOKEN
 
             raise exc
         if response.status == 403:
             exc = Forbidden(response, response_json)
 
             if 353 in exc.api_codes and "ct0" in response.cookies:
-                self.ct0 = response.cookies["ct0"].value
+                self.account.ct0 = response.cookies["ct0"].value
                 return await self.request(method, url, params, json)
+
+            if 64 in exc.api_codes:
+                self.account.status = AccountStatus.BANNED
+
+            if 326 in exc.api_codes:
+                self.account.status = AccountStatus.LOCKED
 
             raise exc
         if response.status == 404:
@@ -193,8 +147,16 @@ class TwitterClient:
         if not 200 <= response.status < 300:
             raise HTTPException(response, response_json)
 
-        self.status = TwitterStatus.GOOD
-        return response
+        if "errors" in response_json:
+            exc = HTTPException(response, response_json)
+
+            if 141 in exc.api_codes:
+                self.account.status = AccountStatus.BANNED
+
+            raise exc
+
+        self.account.status = AccountStatus.GOOD
+        return response, response_json
 
     async def _request_bind_code(
             self,
@@ -216,17 +178,16 @@ class TwitterClient:
             "response_type": response_type,
             "redirect_uri": redirect_uri,
         }
-        response = await self.request("GET", url, params=querystring)
-        response_json = await response.json()
+        response, response_json = await self.request("GET", url, params=querystring)
         return response_json["auth_code"]
 
     async def _confirm_binding(self, bind_code: str):
-        data = {
+        json = {
             'approval': 'true',
             'code': bind_code,
         }
         headers = {'content-type': 'application/x-www-form-urlencoded'}
-        await self.request("POST", 'https://twitter.com/i/api/2/oauth2/authorize', headers=headers, data=data)
+        await self.request("POST", 'https://twitter.com/i/api/2/oauth2/authorize', headers=headers, json=json)
 
     @async_cache
     async def _request_username(self) -> dict:
@@ -242,15 +203,15 @@ class TwitterClient:
             'include_ext_dm_nsfw_media_filter': 'true',
             'include_ext_sharing_audiospaces_listening_data_with_followers': 'true',
         }
-        response = await self.request("GET", url, params=params)
-        return await response.json()
+        response, response_json = await self.request("GET", url, params=params)
+        return response_json
 
     @async_cache
     async def _request_user_id(self, screen_name: str) -> dict:
         url, query_id = self._action_to_url('ProfileSpotlightsQuery')
         params = {'variables': to_json({"screen_name": screen_name})}
-        response = await self.request("GET", url, params=params)
-        return await response.json()
+        response, response_json = await self.request("GET", url, params=params)
+        return response_json
 
     async def _request_user_info(self, screen_name: str):
         url, query_id = self._action_to_url('UserByScreenName')
@@ -278,8 +239,8 @@ class TwitterClient:
             "features": to_json(features),
             "fieldToggles": to_json(field_toggles),
         }
-        response = await self.request("GET", url, params=params)
-        return await response.json()
+        response, response_json = await self.request("GET", url, params=params)
+        return response_json
 
     async def _upload_image_init(self, total_bytes) -> dict:
         params = {
@@ -288,8 +249,8 @@ class TwitterClient:
             'media_type': 'image/jpeg',
             # 'media_category': 'tweet_image',
         }
-        response = await self.request("POST", 'https://upload.twitter.com/i/media/upload.json', params=params)
-        return await response.json()
+        response, response_json = await self.request("POST", 'https://upload.twitter.com/i/media/upload.json', params=params)
+        return response_json
 
     async def _upload_image_append(self, media_id: int, image_as_bytes: bytes):
         url = 'https://upload.twitter.com/i/media/upload.json'
@@ -311,7 +272,7 @@ class TwitterClient:
         params = {
             'command': 'FINALIZE',
             'media_id': str(media_id),
-            # 'original_md5': '52fe60fa015d5fd58a4b3a98fdd4d54g',  # TODO Выяснить, что это за параметр
+            # 'original_md5': '52fe60fa015d5fd58a4b3a98fdd4d54g',
         }
         await self.request("POST", url, params=params)
 
@@ -343,8 +304,8 @@ class TwitterClient:
         headers = {
             'content-type': 'application/x-www-form-urlencoded'
         }
-        response = await self.request("POST", url, params=params, headers=headers)
-        return await response.json()
+        response, response_json= await self.request("POST", url, params=params, headers=headers)
+        return response_json
 
     async def _follow(self, user_id: str | int) -> dict:
         return await self._follow_action("create", user_id)
@@ -361,8 +322,8 @@ class TwitterClient:
             },
             'queryId': query_id
         }
-        response = await self.request("POST", url, json=json_payload)
-        return await response.json()
+        response, response_json = await self.request("POST", url, json=json_payload)
+        return response_json
 
     async def _repost(self, tweet_id: int) -> dict:
         return await self._interact_with_tweet('CreateRetweet', tweet_id)
@@ -382,8 +343,8 @@ class TwitterClient:
             },
             'queryId': query_id,
         }
-        response = await self.request("POST", url, json=json_payload)
-        return await response.json()
+        response, response_json = await self.request("POST", url, json=json_payload)
+        return response_json
 
     async def _pin_tweet(self, tweet_id: str | int) -> dict:
         url = 'https://api.twitter.com/1.1/account/pin_tweet.json'
@@ -394,8 +355,8 @@ class TwitterClient:
         headers = {
             'content-type': 'application/x-www-form-urlencoded',
         }
-        response = await self.request("POST", url, headers=headers, data=data)
-        return await response.json()
+        response, response_json = await self.request("POST", url, headers=headers, data=data)
+        return response_json
 
     async def _tweet(
             self,
@@ -452,8 +413,8 @@ class TwitterClient:
         if media_id:
             payload['variables']['media']['media_entities'].append({'media_id': str(media_id), 'tagged_users': []})
 
-        response = await self.request("POST", url, json=payload)
-        return await response.json()
+        response, response_json = await self.request("POST", url, json=payload)
+        return response_json
 
     async def _vote(self, tweet_id: int | str, card_id: int | str, choice_number: int):
         url = "https://caps.twitter.com/v2/capi/passthrough/1"
@@ -464,8 +425,8 @@ class TwitterClient:
             "twitter:string:cards_platform": "Web-12",
             "twitter:string:selected_choice": str(choice_number),
         }
-        response = await self.request("POST", url, params=params)
-        return await response.json()
+        response, response_json = await self.request("POST", url, params=params)
+        return response_json
 
     async def _request_users(self, action: str, user_id: int | str, count: int) -> dict:
         url, query_id = self._action_to_url(action)
@@ -500,8 +461,8 @@ class TwitterClient:
             'variables': to_json(variables),
             'features': to_json(features),
         }
-        response = await self.request("GET", url, params=params)
-        return await response.json()
+        response, response_json = await self.request("GET", url, params=params)
+        return response_json
 
     async def _request_followers(self, user_id: int | str, count: int) -> dict:
         return await self._request_users('Followers', user_id, count)
@@ -546,8 +507,8 @@ class TwitterClient:
             'variables': to_json(variables),
             'features': to_json(features),
         }
-        response = await self.request("GET", url, params=params)
-        return await response.json()
+        response, response_json = await self.request("GET", url, params=params)
+        return response_json
 
     async def _update_profile_image(self, type: str, media_id: str | int) -> dict:
         url = f"https://api.twitter.com/1.1/account/{type}.json"
@@ -568,8 +529,8 @@ class TwitterClient:
             'return_user': 'true',
             'media_id': str(media_id),
         }
-        response = await self.request("POST", url, params=params)
-        return await response.json()
+        response, response_json = await self.request("POST", url, params=params)
+        return response_json
 
     async def _update_profile_avatar(self, media_id: int | str) -> dict:
         return await self._update_profile_image('update_profile_image', media_id)
@@ -601,8 +562,8 @@ class TwitterClient:
         if birthdate_day: params['birthdate_day'] = birthdate_day
         if birthdate_month: params['birthdate_month'] = birthdate_month
         if birthdate_year: params['birthdate_year'] = birthdate_year
-        response = await self.request("POST", url, params=params)
-        return await response.json()
+        response, response_json = await self.request("POST", url, params=params)
+        return response_json
 
     async def bind_app(
             self,

@@ -1,7 +1,9 @@
-from .client import TwitterClient
+from .client import Client
+from .account import Account
 from . import errors
 
 __all__ = [
-    "TwitterClient",
+    "Client",
+    "Account",
     "errors",
 ]
