@@ -1,17 +1,18 @@
-from datetime import datetime
+from base64 import b64decode
 from enum import Enum
+import json
 import re
-from functools import wraps, cached_property
+
+from pathlib import Path
+
+from ..utils import load_lines
+from .models import UserData
 
 AUTH_TOKEN_PATTERN = re.compile(r'^[a-f0-9]{40}$')
 
 
 def is_valid_auth_token(auth_token: str) -> bool:
     return bool(AUTH_TOKEN_PATTERN.match(auth_token))
-
-
-def parse_datetime(created_at_str: str) -> datetime:
-    return datetime.strptime(created_at_str, '%a %b %d %H:%M:%S +0000 %Y')
 
 
 class AccountStatus(Enum):
@@ -28,14 +29,57 @@ class Account:
             auth_token: str,
             *,
             ct0: str = None,
-            data: dict = None,
+            data: UserData = None,
+            status: AccountStatus = AccountStatus.UNKNOWN
     ):
+        if not is_valid_auth_token(auth_token):
+            raise ValueError("Bad token")
+
         self._auth_token = auth_token
         self.ct0 = ct0
-        self.status: AccountStatus = AccountStatus.UNKNOWN
+        self.data = data
+        self.status = status
 
-        self._data = None
-        if data: self.data = data
+    @classmethod
+    def from_cookies(
+            cls,
+            cookies: dict | str,
+            *,
+            base64: bool = False,
+            data: UserData = None,
+    ) -> "Account":
+        if base64:
+            cookies = json.loads(b64decode(cookies).decode('utf-8'))
+        elif isinstance(cookies, str):
+            cookies = json.loads(cookies)
+
+        auth_token = None
+        ct0 = None
+
+        for cookie in cookies:
+            if cookie['name'] == 'auth_token':
+                auth_token = cookie['value']
+            elif cookie['name'] == 'ct0':
+                ct0 = cookie['value']
+
+        if auth_token is None:
+            raise ValueError("No auth_token found in cookies")
+
+        return cls(auth_token, ct0=ct0, data=data)
+
+    @classmethod
+    def from_file(
+            cls,
+            filepath: Path | str,
+            *,
+            cookies: bool = False,
+            base64: bool = False,
+    ) -> list["Account"]:
+        if cookies:
+            return [cls.from_cookies(cookie, base64=base64)
+                    for cookie in load_lines(filepath)]
+        else:
+            return [cls(auth_token) for auth_token in load_lines(filepath)]
 
     @property
     def auth_token(self) -> str:
@@ -48,55 +92,7 @@ class Account:
         return f"{first_four}...{last_four}"
 
     def __repr__(self):
-        return f"<TwitterAccount auth_token={self.short_auth_token} id={self.id} username={self.username}>"
+        return f"<TwitterAccount auth_token={self.short_auth_token}>"
 
     def __str__(self):
-        return f"[{self.short_auth_token}]"
-
-    def _ensure_data(self, method):
-        @wraps(method)
-        def wrapper(*args, **kwargs):
-            if not self._data:
-                raise ValueError("Request user data first")
-            return method(*args, **kwargs)
-
-        return wrapper
-
-    @property
-    def data(self) -> dict | None:
-        return self._data
-
-    @data.setter
-    def data(self, value: dict):
-        self._data = value
-        # Сбрасываем кешированные свойства
-        self.__dict__.pop('id', None)
-        self.__dict__.pop('created_at', None)
-
-    @cached_property
-    def id(self) -> int:
-        return int(self._data["rest_id"])
-
-    @cached_property
-    def created_at(self) -> datetime:
-        return parse_datetime(self._data["legacy"]["created_at"])
-
-    @property
-    def name(self) -> str:
-        return self._data["legacy"]["name"]
-
-    @property
-    def username(self) -> str:
-        return self._data["legacy"]["username"]
-
-    # @classmethod
-    # def from_cookies(
-    #         cls,
-    #         cookies: dict | str,
-    #         base64: bool = False,
-    #         *,
-    #         ct0: str = None,
-    #         user_agent: str = None,
-    #         wait_on_rate_limit: bool = True,
-    # ) -> "Account":
-    #     raise NotImplementedError
+        return self.short_auth_token

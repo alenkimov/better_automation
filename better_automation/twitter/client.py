@@ -18,11 +18,12 @@ from .errors import (
 )
 from ..utils import to_json
 from .account import Account, AccountStatus
+from .models import UserData
 
 async_cache = alru_cache(maxsize=None)
 
 
-def username_to_screen_name(username) -> str:
+def remove_at_sign(username: str) -> str:
     if username.startswith("@"):
         return username[1:]
     return username
@@ -190,7 +191,7 @@ class Client:
         await self.request("POST", 'https://twitter.com/i/api/2/oauth2/authorize', headers=headers, json=json)
 
     @async_cache
-    async def _request_username(self) -> dict:
+    async def _request_username(self) -> str:
         url = 'https://api.twitter.com/1.1/account/settings.json'
         params = {
             'include_mention_filter': 'true',
@@ -204,19 +205,20 @@ class Client:
             'include_ext_sharing_audiospaces_listening_data_with_followers': 'true',
         }
         response, response_json = await self.request("GET", url, params=params)
-        return response_json
+        username = response_json['screen_name']
+        return username
 
     @async_cache
-    async def _request_user_id(self, screen_name: str) -> dict:
+    async def _profile_spotlight_query(self, username: str) -> dict:
         url, query_id = self._action_to_url('ProfileSpotlightsQuery')
-        params = {'variables': to_json({"screen_name": screen_name})}
+        params = {'variables': to_json({"screen_name": username})}
         response, response_json = await self.request("GET", url, params=params)
         return response_json
 
-    async def _request_user_info(self, screen_name: str):
+    async def _request_user_data(self, username: str) -> UserData:
         url, query_id = self._action_to_url('UserByScreenName')
         variables = {
-            "screen_name": screen_name,
+            "screen_name": username,
             "withSafetyModeUserFields": True,
         }
         features = {
@@ -240,7 +242,8 @@ class Client:
             "fieldToggles": to_json(field_toggles),
         }
         response, response_json = await self.request("GET", url, params=params)
-        return response_json
+        user_data_dict = response_json['data']['user']['result']
+        return UserData(user_data_dict)
 
     async def _upload_image_init(self, total_bytes) -> dict:
         params = {
@@ -428,7 +431,7 @@ class Client:
         response, response_json = await self.request("POST", url, params=params)
         return response_json
 
-    async def _request_users(self, action: str, user_id: int | str, count: int) -> dict:
+    async def _request_users(self, action: str, user_id: int | str, count: int) -> list[UserData]:
         url, query_id = self._action_to_url(action)
         variables = {
             'userId': str(user_id),
@@ -462,12 +465,21 @@ class Client:
             'features': to_json(features),
         }
         response, response_json = await self.request("GET", url, params=params)
-        return response_json
 
-    async def _request_followers(self, user_id: int | str, count: int) -> dict:
+        users = []
+        if 'result' in response_json['data']['user']:
+            entries = response_json['data']['user']['result']['timeline']['timeline']['instructions'][-1]['entries']
+            for entry in entries:
+                if entry['entryId'].startswith('user'):
+                    # user_id = int(entry['entryId'][6:])
+                    user_data_dict = entry["content"]["itemContent"]["user_results"]["result"]
+                    users.append(UserData(user_data_dict))
+        return users
+
+    async def _request_followers(self, user_id: int | str, count: int) -> list[UserData]:
         return await self._request_users('Followers', user_id, count)
 
-    async def _request_following(self, user_id: int | str, count: int) -> dict:
+    async def _request_following(self, user_id: int | str, count: int) -> list[UserData]:
         return await self._request_users('Following', user_id, count)
 
     async def _request_tweet_data(self, tweet_id: int) -> dict:
@@ -571,9 +583,9 @@ class Client:
             code_challenge: str,
             state: str,
             redirect_uri: str,
-            code_challenge_method: str = "plain",
-            scope: str = "tweet.read users.read follows.read offline.access like.read",
-            response_type: str = "code",
+            code_challenge_method: str,
+            scope: str,
+            response_type: str,
     ):
         bind_code = await self._request_bind_code(
             client_id, code_challenge, state, redirect_uri, code_challenge_method, scope, response_type,
@@ -587,16 +599,14 @@ class Client:
         media_id = data['media_id_string']
         return media_id
 
-    async def request_user_id(self, username: str) -> int:
-        screen_name = username_to_screen_name(username)
-        data = await self._request_user_id(screen_name)
-        user_id = data['data']['user_result_by_screen_name']['result']['rest_id']
-        return int(user_id)
-
-    async def request_user_info(self, username: str) -> dict:
-        screen_name = username_to_screen_name(username)
-        data = await self._request_user_info(screen_name)
-        return data['data']['user']['result']
+    async def request_user_data(self, username: str = None) -> UserData | None:
+        if username:
+            user_data = await self._request_user_data(remove_at_sign(username))
+            return user_data
+        else:
+            username = self.account.data.username if self.account.data else await self._request_username()
+            user_data = await self._request_user_data(username)
+            self.account.data = user_data
 
     async def follow(self, user_id: str | int) -> bool:
         data = await self._follow(user_id)
@@ -641,40 +651,25 @@ class Client:
 
     async def pin_tweet(self, tweet_id: str | int) -> bool:
         data = await self._pin_tweet(tweet_id)
-        return 'pinned_tweets' in data
+        return "pinned_tweets" in data
 
-    async def request_followers(self, user_id: int | str, count: int = 10) -> dict[int: str]:
-        data = await self._request_followers(user_id, count)
-        users = {}
-        if 'result' in data['data']['user']:
-            entries = data['data']['user']['result']['timeline']['timeline']['instructions'][-1]['entries']
-            for entry in entries:
-                if entry['entryId'].startswith('user'):
-                    user_id = int(entry['entryId'][6:])
-                    username = entry["content"]["itemContent"]["user_results"]["result"]["legacy"]["screen_name"]
-                    users[user_id] = username
-        return users
+    async def request_followers(self, user_id: int | str = None, count: int = 10) -> list[UserData]:
+        if not user_id and not self.account.data:
+            await self.request_user_data()
 
-    async def request_followings(self, user_id: int | str, count: int = 10) -> dict[int: str]:
-        data = await self._request_following(user_id, count)
-        users = {}
-        if 'result' in data['data']['user']:
-            entries = data['data']['user']['result']['timeline']['timeline']['instructions'][-1]['entries']
+        user_id = user_id or self.account.data.id
+        return await self._request_followers(user_id, count)
 
-            for entry in entries:
-                if entry['entryId'].startswith('user'):
-                    user_id = int(entry['entryId'][6:])
-                    username = entry["content"]["itemContent"]["user_results"]["result"]["legacy"]["screen_name"]
-                    users[user_id] = username
-        return users
+    async def request_followings(self, user_id: int | str = None, count: int = 10) -> list[UserData]:
+        if not user_id and not self.account.data:
+            await self.request_user_data()
 
-    async def request_username(self):
-        data = await self._request_username()
-        return data['screen_name']
+        user_id = user_id or self.account.data.id
+        return await self._request_following(user_id, count)
 
     async def update_profile(self, *args, **kwargs) -> bool:
         data = await self._update_profile(*args, **kwargs)
-        return 'id' in data
+        return "id" in data
 
     async def update_profile_avatar(self, media_id: int | str) -> bool:
         data = await self._update_profile_avatar(media_id)
