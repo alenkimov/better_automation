@@ -18,7 +18,7 @@ def is_valid_auth_token(auth_token: str) -> bool:
 class AccountStatus(Enum):
     BAD_TOKEN = "BAD_TOKEN"  # (401) 32
     UNKNOWN = "UNKNOWN"
-    BANNED = "BANNED"  # (403) 64, (200) 141
+    SUSPENDED = "SUSPENDED"  # (403) 64, (200) 141
     LOCKED = "LOCKED"  # (403) 326
     GOOD = "GOOD"
 

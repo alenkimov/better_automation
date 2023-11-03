@@ -145,7 +145,7 @@ async def vote(accounts):
     for account in accounts:
         async with proxy_session(PROXY) as session:
             twitter = TwitterClient(account, session)
-            data = await twitter._vote(1701624723933905280, 1701624722256236544, 1)
+            data = await twitter.vote(1701624723933905280, 1701624722256236544, 1)
             votes_count = data['card']['binding_values']['choice1_count']['string_value']
             print(f"Votes: {votes_count}")
 
@@ -184,6 +184,9 @@ async def twitter_demo():
             # Выражение любви через твит
             tweet_id = await twitter.tweet("I love YOU! !!!!1")
             print(f"Любовь выражена! Tweet id: {tweet_id}")
+            
+            # Закрепляем твит
+            print(f"Tweet is pined: {await twitter.pin_tweet(tweet_id)}")
 
             # Лайк
             print(f"Tweet {tweet_id} is liked: {await twitter.like(tweet_id)}")

@@ -1,5 +1,6 @@
 import asyncio
 import time
+from functools import wraps
 from typing import Any
 
 import aiohttp
@@ -35,10 +36,8 @@ class Client:
         'accept': '*/*',
         'accept-language': 'uk',
         'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
-        'content-type': 'application/json',
         'origin': 'https://twitter.com',
         'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
         'sec-fetch-dest': 'empty',
         'sec-fetch-mode': 'cors',
         'sec-fetch-site': 'same-origin',
@@ -67,7 +66,8 @@ class Client:
     def _action_to_url(cls, action: str) -> tuple[str, str]:
         """Returns url and query_id"""
         query_id = cls.ACTION_TO_QUERY_ID[action]
-        return f"{cls.GRAPHQL_URL}/{query_id}/{action}", query_id
+        url = f"{cls.GRAPHQL_URL}/{query_id}/{action}"
+        return url, query_id
 
     def __init__(
             self,
@@ -76,6 +76,15 @@ class Client:
             *,
             wait_on_rate_limit: bool = True,
     ):
+        """
+        Инициализирует клиент с заданным аккаунтом и сессией.
+
+        Args:
+            account (Account): Экземпляр аккаунта, используемый для аутентификации.
+            session (aiohttp.ClientSession): Сессия клиента для выполнения асинхронных HTTP-запросов.
+            wait_on_rate_limit (bool): Флаг, определяющий, следует ли ожидать сброса лимита запросов.
+        """
+
         self.account = account
         self.session = session
         self.wait_on_rate_limit = wait_on_rate_limit
@@ -89,6 +98,30 @@ class Client:
             json: Any = None,
             data: Any = None,
     ) -> tuple[aiohttp.ClientResponse, Any]:
+        """
+        Выполняет асинхронный HTTP-запрос с использованием предоставленных параметров и обрабатывает ответ.
+
+        Args:
+            method: HTTP-метод запроса.
+            url: URL-адрес запроса.
+            params (dict): Параметры строки запроса.
+            headers (dict): Заголовки запроса.
+            json: Тело запроса в формате JSON.
+            data: Данные запроса.
+
+        Returns:
+            tuple[aiohttp.ClientResponse, Any]: Ответ сервера и данные в формате JSON.
+
+        Raises:
+            HTTPException: Общее исключение для HTTP-ошибок.
+            BadRequest: Исключение для статуса HTTP 400.
+            Unauthorized: Исключение для статуса HTTP 401.
+            Forbidden: Исключение для статуса HTTP 403.
+            NotFound: Исключение для статуса HTTP 404.
+            TooManyRequests: Исключение для статуса HTTP 429.
+            TwitterServerError: Исключение для серверных ошибок Twitter с кодом статуса >= 500.
+        """
+
         cookies = {"auth_token": self.account.auth_token}
         full_headers = headers or {}
         full_headers.update(self.DEFAULT_HEADERS)
@@ -123,10 +156,12 @@ class Client:
 
             if 353 in exc.api_codes and "ct0" in response.cookies:
                 self.account.ct0 = response.cookies["ct0"].value
-                return await self.request(method, url, params, json)
+                return await self.request(
+                    method, url, params, headers, json, data,
+                )
 
             if 64 in exc.api_codes:
-                self.account.status = AccountStatus.BANNED
+                self.account.status = AccountStatus.SUSPENDED
 
             if 326 in exc.api_codes:
                 self.account.status = AccountStatus.LOCKED
@@ -140,7 +175,9 @@ class Client:
                 sleep_time = reset_time - int(time.time()) + 1
                 if sleep_time > 0:
                     await asyncio.sleep(sleep_time)
-                return await self.request(method, url, params, json)
+                return await self.request(
+                    method, url, params, headers, json, data,
+                )
             else:
                 raise TooManyRequests(response, response_json)
         if response.status >= 500:
@@ -152,7 +189,10 @@ class Client:
             exc = HTTPException(response, response_json)
 
             if 141 in exc.api_codes:
-                self.account.status = AccountStatus.BANNED
+                self.account.status = AccountStatus.SUSPENDED
+
+            if 326 in exc.api_codes:
+                self.account.status = AccountStatus.LOCKED
 
             raise exc
 
@@ -169,6 +209,22 @@ class Client:
             scope: str,
             response_type: str,
     ):
+        """
+        Запрашивает код привязки для OAuth аутентификации.
+
+        Args:
+            client_id (str): Идентификатор клиента OAuth.
+            code_challenge (str): Параметр для метода проверки подлинности PKCE.
+            state (str): Состояние CSRF-защиты.
+            redirect_uri (str): URI перенаправления после аутентификации.
+            code_challenge_method (str): Метод генерации code_challenge.
+            scope (str): Запрашиваемые разрешения.
+            response_type (str): Тип ответа в запросе OAuth.
+
+        Returns:
+            str: Код привязки.
+        """
+
         url = "https://twitter.com/i/api/2/oauth2/authorize"
         querystring = {
             "client_id": client_id,
@@ -180,18 +236,60 @@ class Client:
             "redirect_uri": redirect_uri,
         }
         response, response_json = await self.request("GET", url, params=querystring)
-        return response_json["auth_code"]
+        bind_code = response_json["auth_code"]
+        return bind_code
 
     async def _confirm_binding(self, bind_code: str):
-        json = {
+        """
+        Подтверждает привязку приложения.
+
+        Args:
+            bind_code (str): Код привязки для подтверждения.
+        """
+
+        data = {
             'approval': 'true',
             'code': bind_code,
         }
         headers = {'content-type': 'application/x-www-form-urlencoded'}
-        await self.request("POST", 'https://twitter.com/i/api/2/oauth2/authorize', headers=headers, json=json)
+        await self.request("POST", 'https://twitter.com/i/api/2/oauth2/authorize', headers=headers, data=data)
+
+    async def bind_app(
+            self,
+            client_id: str,
+            code_challenge: str,
+            state: str,
+            redirect_uri: str,
+            code_challenge_method: str,
+            scope: str,
+            response_type: str,
+    ):
+        """
+        Привязка приложения.
+
+        Args:
+            client_id (str): Идентификатор клиента OAuth.
+            code_challenge (str): Параметр для метода проверки подлинности PKCE.
+            state (str): Состояние CSRF-защиты.
+            redirect_uri (str): URI перенаправления после аутентификации.
+            code_challenge_method (str): Метод генерации code_challenge.
+            scope (str): Запрашиваемые разрешения.
+            response_type (str): Тип ответа в запросе OAuth.
+
+        Returns:
+            str: Код подтверждения привязки.
+        """
+
+        bind_code = await self._request_bind_code(
+            client_id, code_challenge, state, redirect_uri, code_challenge_method, scope, response_type,
+        )
+        await self._confirm_binding(bind_code)
+        return bind_code
 
     @async_cache
     async def _request_username(self) -> str:
+        """Запрашивает имя пользователя."""
+
         url = 'https://api.twitter.com/1.1/account/settings.json'
         params = {
             'include_mention_filter': 'true',
@@ -210,6 +308,7 @@ class Client:
 
     @async_cache
     async def _profile_spotlight_query(self, username: str) -> dict:
+        """Раньше использовался для запроса ID пользователя. Сейчас не используется."""
         url, query_id = self._action_to_url('ProfileSpotlightsQuery')
         params = {'variables': to_json({"screen_name": username})}
         response, response_json = await self.request("GET", url, params=params)
@@ -245,6 +344,15 @@ class Client:
         user_data_dict = response_json['data']['user']['result']
         return UserData(user_data_dict)
 
+    async def request_user_data(self, username: str = None) -> UserData | None:
+        if username:
+            user_data = await self._request_user_data(remove_at_sign(username))
+            return user_data
+        else:
+            username = self.account.data.username if self.account.data else await self._request_username()
+            user_data = await self._request_user_data(username)
+            self.account.data = user_data
+
     async def _upload_image_init(self, total_bytes) -> dict:
         params = {
             'command': 'INIT',
@@ -279,14 +387,15 @@ class Client:
         }
         await self.request("POST", url, params=params)
 
-    async def _upload_image(self, image: bytes) -> dict:
+    async def upload_image(self, image: bytes) -> str:
+        """Upload image as bytes. Returns media_id"""
         media_data = await self._upload_image_init(len(image))
         media_id = media_data['media_id_string']
         await self._upload_image_append(media_id, image)
         await self._upload_image_finalize(media_id)
-        return media_data
+        return media_id
 
-    async def _follow_action(self, action: str, user_id: int | str):
+    async def _follow_action(self, action: str, user_id: int | str) -> bool:
         url = f"https://twitter.com/i/api/1.1/friendships/{action}.json"
         params = {
             'include_profile_interstitial_type': '1',
@@ -305,15 +414,15 @@ class Client:
             'user_id': user_id,
         }
         headers = {
-            'content-type': 'application/x-www-form-urlencoded'
+            'content-type': 'application/x-www-form-urlencoded',
         }
-        response, response_json= await self.request("POST", url, params=params, headers=headers)
-        return response_json
+        response, response_json = await self.request("POST", url, params=params, headers=headers)
+        return "id" in response_json
 
-    async def _follow(self, user_id: str | int) -> dict:
+    async def follow(self, user_id: str | int) -> bool:
         return await self._follow_action("create", user_id)
 
-    async def _unfollow(self, user_id: str | int) -> dict:
+    async def unfollow(self, user_id: str | int) -> bool:
         return await self._follow_action("destroy", user_id)
 
     async def _interact_with_tweet(self, action: str, tweet_id: int) -> dict:
@@ -328,16 +437,24 @@ class Client:
         response, response_json = await self.request("POST", url, json=json_payload)
         return response_json
 
-    async def _repost(self, tweet_id: int) -> dict:
-        return await self._interact_with_tweet('CreateRetweet', tweet_id)
+    async def repost(self, tweet_id: int) -> int:
+        """Repost (retweet) a tweet by its id"""
+        response_json = await self._interact_with_tweet('CreateRetweet', tweet_id)
+        retweet_id = int(response_json['data']['create_retweet']['retweet_results']['result']['rest_id'])
+        return retweet_id
 
-    async def _like(self, tweet_id: int) -> dict:
-        return await self._interact_with_tweet('FavoriteTweet', tweet_id)
+    async def like(self, tweet_id: int) -> bool:
+        response_json = await self._interact_with_tweet('FavoriteTweet', tweet_id)
+        is_liked = response_json['data']['favorite_tweet'] == 'Done'
+        return is_liked
 
-    async def _unlike(self, tweet_id: int) -> dict:
-        return await self._interact_with_tweet('UnfavoriteTweet', tweet_id)
+    async def unlike(self, tweet_id: int) -> dict:
+        response_json = await self._interact_with_tweet('UnfavoriteTweet', tweet_id)
+        is_unliked = 'data' in response_json and response_json['data']['unfavorite_tweet'] == 'Done'
+        return is_unliked
 
-    async def _delete_tweet(self, tweet_id: int | str) -> dict:
+    async def delete_tweet(self, tweet_id: int | str) -> bool:
+        """Delete a tweet by its id"""
         url, query_id = self._action_to_url('DeleteTweet')
         json_payload = {
             'variables': {
@@ -347,9 +464,10 @@ class Client:
             'queryId': query_id,
         }
         response, response_json = await self.request("POST", url, json=json_payload)
-        return response_json
+        is_deleted = "data" in response_json and "delete_tweet" in response_json["data"]
+        return is_deleted
 
-    async def _pin_tweet(self, tweet_id: str | int) -> dict:
+    async def pin_tweet(self, tweet_id: str | int) -> bool:
         url = 'https://api.twitter.com/1.1/account/pin_tweet.json'
         data = {
             'tweet_mode': 'extended',
@@ -359,7 +477,8 @@ class Client:
             'content-type': 'application/x-www-form-urlencoded',
         }
         response, response_json = await self.request("POST", url, headers=headers, data=data)
-        return response_json
+        is_pinned = bool(response_json["pinned_tweets"])
+        return is_pinned
 
     async def _tweet(
             self,
@@ -368,16 +487,12 @@ class Client:
             media_id: int | str = None,
             tweet_id_to_reply: str | int = None,
             attachment_url: str = None,
-    ) -> dict:
-        if text is None:
-            text = ""
-
-        action = 'CreateTweet'
-        url, query_id = self._action_to_url(action)
-
+    ) -> int:
+        """Returns tweet_id"""
+        url, query_id = self._action_to_url('CreateTweet')
         payload = {
             'variables': {
-                'tweet_text': text,
+                'tweet_text': text if text is not None else "",
                 'dark_request': False,
                 'media': {
                     'media_entities': [],
@@ -417,9 +532,19 @@ class Client:
             payload['variables']['media']['media_entities'].append({'media_id': str(media_id), 'tagged_users': []})
 
         response, response_json = await self.request("POST", url, json=payload)
-        return response_json
+        tweet_id = response_json['data']['create_tweet']['tweet_results']['result']['rest_id']
+        return tweet_id
 
-    async def _vote(self, tweet_id: int | str, card_id: int | str, choice_number: int):
+    async def tweet(self, text: str, *, media_id: int | str = None) -> int:
+        return await self._tweet(text, media_id=media_id)
+
+    async def reply(self, tweet_id: str | int, text: str, *, media_id: int | str = None) -> int:
+        return await self._tweet(text, media_id=media_id, tweet_id_to_reply=tweet_id)
+
+    async def quote(self, tweet_url: str, text: str, *, media_id: int | str = None) -> int:
+        return await self._tweet(text, media_id=media_id, attachment_url=tweet_url)
+
+    async def vote(self, tweet_id: int | str, card_id: int | str, choice_number: int) -> dict:
         url = "https://caps.twitter.com/v2/capi/passthrough/1"
         params = {
             "twitter:string:card_uri": f"card://{card_id}",
@@ -471,15 +596,27 @@ class Client:
             entries = response_json['data']['user']['result']['timeline']['timeline']['instructions'][-1]['entries']
             for entry in entries:
                 if entry['entryId'].startswith('user'):
-                    # user_id = int(entry['entryId'][6:])
                     user_data_dict = entry["content"]["itemContent"]["user_results"]["result"]
                     users.append(UserData(user_data_dict))
         return users
 
-    async def _request_followers(self, user_id: int | str, count: int) -> list[UserData]:
+    @staticmethod
+    def ensure_user_id(func):
+        @wraps(func)
+        async def wrapper(self, user_id: int | str = None, *args, **kwargs):
+            if user_id is None:
+                if not self.account.data:
+                    await self.request_user_data()
+                user_id = self.account.data.id
+            return await func(self, user_id, *args, **kwargs)
+        return wrapper
+
+    @ensure_user_id
+    async def request_followers(self, user_id: int | str = None, count: int = 10) -> list[UserData]:
         return await self._request_users('Followers', user_id, count)
 
-    async def _request_following(self, user_id: int | str, count: int) -> list[UserData]:
+    @ensure_user_id
+    async def request_followings(self, user_id: int | str = None, count: int = 10) -> list[UserData]:
         return await self._request_users('Following', user_id, count)
 
     async def _request_tweet_data(self, tweet_id: int) -> dict:
@@ -522,7 +659,7 @@ class Client:
         response, response_json = await self.request("GET", url, params=params)
         return response_json
 
-    async def _update_profile_image(self, type: str, media_id: str | int) -> dict:
+    async def _update_profile_image(self, type: str, media_id: str | int) -> bool:
         url = f"https://api.twitter.com/1.1/account/{type}.json"
         params = {
             'include_profile_interstitial_type': '1',
@@ -542,15 +679,16 @@ class Client:
             'media_id': str(media_id),
         }
         response, response_json = await self.request("POST", url, params=params)
-        return response_json
+        is_updated = "id" in response_json
+        return is_updated
 
-    async def _update_profile_avatar(self, media_id: int | str) -> dict:
+    async def update_profile_avatar(self, media_id: int | str) -> bool:
         return await self._update_profile_image('update_profile_image', media_id)
 
-    async def _update_profile_banner(self, media_id: int | str) -> dict:
+    async def update_profile_banner(self, media_id: int | str) -> bool:
         return await self._update_profile_image('update_profile_banner', media_id)
 
-    async def _update_profile(
+    async def update_profile(
             self,
             birthdate_day: int,
             birthdate_month: int,
@@ -575,106 +713,5 @@ class Client:
         if birthdate_month: params['birthdate_month'] = birthdate_month
         if birthdate_year: params['birthdate_year'] = birthdate_year
         response, response_json = await self.request("POST", url, params=params)
-        return response_json
-
-    async def bind_app(
-            self,
-            client_id: str,
-            code_challenge: str,
-            state: str,
-            redirect_uri: str,
-            code_challenge_method: str,
-            scope: str,
-            response_type: str,
-    ):
-        bind_code = await self._request_bind_code(
-            client_id, code_challenge, state, redirect_uri, code_challenge_method, scope, response_type,
-        )
-        await self._confirm_binding(bind_code)
-        return bind_code
-
-    async def upload_image(self, image_bytes: bytes) -> str:
-        """Upload image as bytes. Returns media_id"""
-        data = await self._upload_image(image_bytes)
-        media_id = data['media_id_string']
-        return media_id
-
-    async def request_user_data(self, username: str = None) -> UserData | None:
-        if username:
-            user_data = await self._request_user_data(remove_at_sign(username))
-            return user_data
-        else:
-            username = self.account.data.username if self.account.data else await self._request_username()
-            user_data = await self._request_user_data(username)
-            self.account.data = user_data
-
-    async def follow(self, user_id: str | int) -> bool:
-        data = await self._follow(user_id)
-        return "id" in data
-
-    async def unfollow(self, user_id: str | int) -> bool:
-        data = await self._unfollow(user_id)
-        return "id" in data
-
-    async def like(self, tweet_id: str | int) -> bool:
-        data = await self._like(tweet_id)
-        return data['data']['favorite_tweet'] == 'Done'
-
-    async def unlike(self, tweet_id: str | int) -> bool:
-        data = await self._unlike(tweet_id)
-        return "data" in data and data['data']['unfavorite_tweet'] == 'Done'
-
-    async def _tweet_and_return_tweet_id(self, *args, **kwargs) -> int:
-        data = await self._tweet(*args, **kwargs)
-        tweet_id = data['data']['create_tweet']['tweet_results']['result']['rest_id']
-        return tweet_id
-
-    async def tweet(self, text: str, *, media_id: int | str = None) -> int:
-        return await self._tweet_and_return_tweet_id(text, media_id=media_id)
-
-    async def reply(self, tweet_id: str | int, text: str, *, media_id: int | str = None) -> int:
-        return await self._tweet_and_return_tweet_id(text, media_id=media_id, tweet_id_to_reply=tweet_id)
-
-    async def quote(self, tweet_url: str, text: str, *, media_id: int | str = None) -> int:
-        return await self._tweet_and_return_tweet_id(text, media_id=media_id, attachment_url=tweet_url)
-
-    async def repost(self, tweet_id: str | int) -> int:
-        """Repost (retweet) a tweet by its id"""
-        data = await self._repost(tweet_id)
-        retweet_id = data['data']['create_retweet']['retweet_results']['result']['rest_id']
-        return int(retweet_id)
-
-    async def delete_tweet(self, tweet_id: int) -> bool:
-        """Delete a tweet by its id"""
-        data = await self._delete_tweet(tweet_id)
-        return "data" in data and "delete_tweet" in data["data"]
-
-    async def pin_tweet(self, tweet_id: str | int) -> bool:
-        data = await self._pin_tweet(tweet_id)
-        return "pinned_tweets" in data
-
-    async def request_followers(self, user_id: int | str = None, count: int = 10) -> list[UserData]:
-        if not user_id and not self.account.data:
-            await self.request_user_data()
-
-        user_id = user_id or self.account.data.id
-        return await self._request_followers(user_id, count)
-
-    async def request_followings(self, user_id: int | str = None, count: int = 10) -> list[UserData]:
-        if not user_id and not self.account.data:
-            await self.request_user_data()
-
-        user_id = user_id or self.account.data.id
-        return await self._request_following(user_id, count)
-
-    async def update_profile(self, *args, **kwargs) -> bool:
-        data = await self._update_profile(*args, **kwargs)
-        return "id" in data
-
-    async def update_profile_avatar(self, media_id: int | str) -> bool:
-        data = await self._update_profile_avatar(media_id)
-        return "id" in data
-
-    async def update_profile_banner(self, media_id: int | str) -> bool:
-        data = await self._update_profile_banner(media_id)
-        return "id" in data
+        is_updated = "id" in response_json
+        return is_updated
