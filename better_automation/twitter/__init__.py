@@ -1,10 +1,10 @@
-from .client import Client
-from .account import Account, AccountStatus
+from .client import TwitterClient
+from .account import TwitterAccount, TwitterAccountStatus
 from . import errors
 
 __all__ = [
-    "Client",
-    "Account",
-    "AccountStatus",
+    "TwitterClient",
+    "TwitterAccount",
+    "TwitterAccountStatus",
     "errors",
 ]

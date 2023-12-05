@@ -1,5 +1,7 @@
-from .client import Client
+from .client import DiscordClient
+from .account import DiscordAccount
 
 __all__ = [
-    "Client",
+    "DiscordClient",
+    "DiscordAccount",
 ]

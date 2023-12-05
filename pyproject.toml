@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "better-automation"
-version = "1.2.0"
+version = "2.0.0"
 description = "Unofficial Twitter and Discord API"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
@@ -8,12 +8,10 @@ packages = [{include = "better_automation"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
+curl-cffi = "^0.5.10"
+yarl = "^1.9.3"
 tqdm = "^4.66.1"
-pyuseragents = "^1.0.5"
-aioimaplib = "^1.0.1"
-aiohttp-socks = "^0.8.4"
-async-lru = "^2.0.4"
-
+pydantic = "^2.5.2"
 
 [build-system]
 requires = ["poetry-core"]
