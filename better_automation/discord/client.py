@@ -103,11 +103,11 @@ class DiscordClient(BaseClient):
             raise NotFound(response, data)
 
         if response.status_code == 429:
-            if not response.headers.get('Via') or isinstance(data, str):
+            if not response.headers.get("via") or isinstance(data, str):
                 # Banned by Cloudflare more than likely.
                 raise HTTPException(response, data)
 
-            retry_after = data['retry_after']
+            retry_after = data["retry_after"]
             raise RateLimited(retry_after)
 
         if response.status_code >= 500:
@@ -135,19 +135,21 @@ class DiscordClient(BaseClient):
             *,
             client_id: str,
             scope: str,
+            state: str = None,
             response_type: str = "code",
     ):
         url = f"{self.BASE_API_URL}/oauth2/authorize"
-        querystring = {
+        params = {
             "client_id": client_id,
             "response_type": response_type,
             "scope": scope,
         }
+        if state: params["state"] = state
         payload = {
             "permissions": "0",
             "authorize": True,
         }
-        response, data = await self.request("POST", url, json=payload, params=querystring)
+        response, data = await self.request("POST", url, json=payload, params=params)
         bind_url = URL(data["location"])
         bind_code = bind_url.query.get("code")
         return bind_code
