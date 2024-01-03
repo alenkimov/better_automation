@@ -84,11 +84,11 @@ def print_statistic(sorted_accounts: SortedAccounts):
 async def establish_account_status(account: TwitterAccount, proxy: Proxy = None):
     async with twitter_client(account, proxy) as twitter:
         try:
-            await twitter.follow(44196397)  # Elon Musk ID
-        except (TwitterException, requests.errors.RequestsError):
+            await twitter.establish_status()
+        except requests.errors.RequestsError:
             pass
 
-    tqdm.write(f"{account} {account.status}")
+    tqdm.write(f"{proxy} {account} {account.status}")
 
 
 async def check_accounts(
@@ -104,7 +104,8 @@ async def check_accounts(
     proxy_to_account_list = list(zip(cycle(proxies), accounts))
 
     tasks = []
-    for proxy, account in proxy_to_account_list:
+    for proxy, account_with_additional_data in proxy_to_account_list:
+        account = account_with_additional_data[1]
         if account.status == TwitterAccountStatus.UNKNOWN:
             tasks.append(establish_account_status(account, proxy=proxy))
     try:

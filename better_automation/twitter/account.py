@@ -28,10 +28,11 @@ class TwitterAccount(BaseAccount):
 
     def __init__(
             self,
+            *args,
             ct0: str = None,
             **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(*args, **kwargs)
         self.ct0 = ct0
 
     @classmethod

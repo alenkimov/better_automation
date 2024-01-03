@@ -660,7 +660,15 @@ class TwitterClient(BaseClient):
         # Проверяем, что все переданные параметры соответствуют полученным
         is_updated = all(response_json.get(key) == value for key, value in data.items() if key != "url")
         if website: is_updated &= URL(website) == URL(response_json["entities"]["url"]["urls"][0]["expanded_url"])
+        await self.establish_status()  # Изменение данных профиля часто замораживает аккаунт
         return is_updated
+
+    async def establish_status(self):
+        url = "https://twitter.com/i/api/1.1/account/update_profile.json"
+        try:
+            await self.request("POST", url)
+        except HTTPException:
+            pass
 
     async def update_birthdate(
             self,
