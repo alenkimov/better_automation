@@ -1,12 +1,12 @@
 from base64 import b64decode
-from pathlib import Path
 from enum import StrEnum
 import json
 
 from pydantic import Field
 
-from ..utils import load_lines
 from ..base import BaseAccount
+
+TWITTER_AUTH_TOKEN_PATTERN = r"^[a-f0-9]{40}$"
 
 
 class TwitterAccountStatus(StrEnum):
@@ -16,12 +16,23 @@ class TwitterAccountStatus(StrEnum):
     LOCKED = "LOCKED"  # (403) 326
     GOOD = "GOOD"
 
+    def __str__(self):
+        return self.value
+
 
 class TwitterAccount(BaseAccount):
-    auth_token: str = Field(default=None, pattern=r"^[a-f0-9]{40}$")
+    auth_token: str = Field(default=None, pattern=TWITTER_AUTH_TOKEN_PATTERN)
     id: int | None = None
     ct0: str | None = None
     status: TwitterAccountStatus = TwitterAccountStatus.UNKNOWN
+
+    def __init__(
+            self,
+            ct0: str = None,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.ct0 = ct0
 
     @classmethod
     def from_cookies(
@@ -29,6 +40,7 @@ class TwitterAccount(BaseAccount):
             cookies: dict | str,
             *,
             base64: bool = False,
+            **kwargs,
     ) -> "TwitterAccount":
         if base64:
             cookies = json.loads(b64decode(cookies).decode('utf-8'))
@@ -47,20 +59,16 @@ class TwitterAccount(BaseAccount):
         if auth_token is None:
             raise ValueError("auth_token not found in cookies.")
 
-        account = cls(auth_token)
-        account.ct0 = ct0
+        ct0 = kwargs.pop("ct0", None) or ct0
+
+        account = cls(auth_token, ct0=ct0, **kwargs)
         return account
 
     @classmethod
     def from_file(
             cls,
-            filepath: Path | str,
-            *,
-            cookies: bool = False,
-            base64: bool = False,
+            *args,
+            fields: tuple[str] = ("auth_token", "password", "email", "username", "ct0"),
+            **kwargs,
     ) -> list["TwitterAccount"]:
-        if cookies:
-            return [cls.from_cookies(cookie, base64=base64)
-                    for cookie in load_lines(filepath)]
-        else:
-            return [cls(auth_token) for auth_token in load_lines(filepath)]
+        return super().from_file(*args, fields=fields, *kwargs)

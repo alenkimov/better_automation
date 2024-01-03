@@ -1,6 +1,12 @@
+import sys
 import asyncio
 
 from tqdm.asyncio import tqdm
+
+
+def set_windows_selector_event_loop_policy():
+    if sys.version_info >= (3, 8) and sys.platform.lower().startswith("win"):
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 def curry_async(async_func):

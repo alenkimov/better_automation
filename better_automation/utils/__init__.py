@@ -8,6 +8,7 @@ from .file import (
     to_json,
 )
 from .asyncio import (
+    set_windows_selector_event_loop_policy,
     curry_async,
     bounded_gather,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "write_lines",
     "write_json",
     "to_json",
+    "set_windows_selector_event_loop_policy",
     "curry_async",
     "bounded_gather",
 ]

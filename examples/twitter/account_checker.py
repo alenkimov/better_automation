@@ -1,6 +1,16 @@
-import sys, asyncio
+"""
+Скрипт для установки статуса Twitter аккаунтов (проверка на бан).
+
+pip install better-automation better-proxy
+"""
+
+import sys
+import asyncio
+from contextlib import asynccontextmanager
 from itertools import cycle
 from pathlib import Path
+from typing import Iterable
+
 from curl_cffi import requests
 
 from tqdm.asyncio import tqdm
@@ -8,26 +18,37 @@ from tqdm.asyncio import tqdm
 from better_automation.twitter import TwitterAccount, TwitterClient, TwitterAccountStatus
 from better_automation.twitter.errors import HTTPException as TwitterException
 from better_automation.utils import (
+    set_windows_selector_event_loop_policy,
     load_lines,
     write_lines,
     bounded_gather,
 )
+from better_proxy import Proxy
 
-from examples.common import set_windows_event_loop_policy, PROXY
-
-set_windows_event_loop_policy()
+set_windows_selector_event_loop_policy()
 
 TwitterAccountWithAdditionalData = tuple[str, TwitterAccount]
 SortedAccounts = dict[TwitterAccountStatus: TwitterAccountWithAdditionalData]
 
-INPUT_OUTPUT_DIR = Path('input-output')
+INPUT_OUTPUT_DIR = Path("input-output")
 INPUT_OUTPUT_DIR.mkdir(exist_ok=True)
+
+PROXIES_TXT = INPUT_OUTPUT_DIR / "PROXIES.txt"
+ACCOUNTS_TXT = INPUT_OUTPUT_DIR / f"{TwitterAccountStatus.UNKNOWN}.txt"
+[filepath.touch() for filepath in (PROXIES_TXT, ACCOUNTS_TXT)]
+
 MAX_TASKS = 100
 SEPARATOR = ":"
 
 
+@asynccontextmanager
+async def twitter_client(account: TwitterAccount, proxy: Proxy = None, verify: bool = False):
+    async with TwitterClient(account, proxy=proxy.as_url if proxy else None, verify=verify) as twitter:
+        yield twitter
+
+
 def sort_accounts(
-        accounts: list[TwitterAccountWithAdditionalData]
+        accounts: Iterable[TwitterAccountWithAdditionalData]
 ) -> SortedAccounts:
     status_to_account_with_additional_data = {status: list() for status in TwitterAccountStatus}
     for additional_data, account in accounts:
@@ -45,10 +66,10 @@ def save_sorted_accounts_with_additional_data(sorted_accounts: dict[TwitterAccou
 def load_accounts_with_additional_data() -> list[TwitterAccountWithAdditionalData]:
     accounts = list()
     for file in INPUT_OUTPUT_DIR.iterdir():
-        if file.is_file():
+        if file.is_file() and file.stem in TwitterAccountStatus.__members__:
             status = file.stem
             for additional_data in load_lines(file):
-                auth_token = additional_data.split(SEPARATOR)[-1]
+                auth_token = additional_data.split(SEPARATOR)[0]
                 account = TwitterAccount(auth_token)
                 account.status = status
                 accounts.append((additional_data, account))
@@ -60,31 +81,31 @@ def print_statistic(sorted_accounts: SortedAccounts):
         print(f"{status}: {len(accounts_with_additional_data)}")
 
 
-async def establish_account_status(account: TwitterAccount, proxy: str = None):
-    async with TwitterClient(account, proxy=proxy, verify=False) as twitter:
+async def establish_account_status(account: TwitterAccount, proxy: Proxy = None):
+    async with twitter_client(account, proxy) as twitter:
         try:
             await twitter.follow(44196397)  # Elon Musk ID
-        except TwitterException:
-            pass
-        except requests.errors.RequestsError:
+        except (TwitterException, requests.errors.RequestsError):
             pass
 
     tqdm.write(f"{account} {account.status}")
 
 
 async def check_accounts(
-        accounts: list[TwitterAccountWithAdditionalData],
-        proxies: list[str],
+        accounts: Iterable[TwitterAccountWithAdditionalData],
+        proxies: Iterable[Proxy],
 ):
     sorted_accounts = sort_accounts(accounts)
     print_statistic(sorted_accounts)
 
-    proxies_cycle = cycle(proxies)  # Создаем итератор, который будет циклически проходить по прокси
+    if not proxies:
+        proxies = [None]
+
+    proxy_to_account_list = list(zip(cycle(proxies), accounts))
 
     tasks = []
-    for line, account in accounts:
+    for proxy, account in proxy_to_account_list:
         if account.status == TwitterAccountStatus.UNKNOWN:
-            proxy = next(proxies_cycle)  # Получаем следующий прокси из итератора
             tasks.append(establish_account_status(account, proxy=proxy))
     try:
         await bounded_gather(*tasks, max_tasks=MAX_TASKS, file=sys.stdout)
@@ -95,12 +116,17 @@ async def check_accounts(
 
 
 if __name__ == '__main__':
+    proxies = Proxy.from_file(PROXIES_TXT)
+    print(f"Прокси: {len(proxies)}")
+    if not proxies:
+        print(f"(Необязательно) Внесите прокси в любом формате "
+              f"\n\tв файл по пути {PROXIES_TXT}")
+
     accounts = load_accounts_with_additional_data()
     if not accounts:
-        accounts_filepath = INPUT_OUTPUT_DIR / f"{TwitterAccountStatus.UNKNOWN}.txt"
-        accounts_filepath.touch()
-        print(f"Внесите аккаунты в файл по пути {accounts_filepath}")
+        print(f"Внесите аккаунты в формате auth_token:data1:data2:..."
+              f" (auth_token - обязательный параметр, остальное - любая другая информация об аккаунте)"
+              f"\n\tв файл по пути {ACCOUNTS_TXT}")
         quit()
 
-    proxies = load_lines("proxies.txt")
     asyncio.run(check_accounts(accounts, proxies))

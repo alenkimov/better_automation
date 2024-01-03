@@ -13,8 +13,13 @@ More libraries of the family:
 - [better-web3](https://github.com/alenkimov/better_web3)
 - [better-proxy](https://github.com/alenkimov/better_proxy)
 
+
 ## BaseSession
-Взаимодействие с Twitter происходит через слегка модифицированную асинхронную сессию из библиотеки [curl_cffi](https://github.com/yifeikong/curl_cffi).
+Взаимодействие происходит через слегка модифицированную асинхронную сессию из библиотеки [curl_cffi](https://github.com/yifeikong/curl_cffi).
+
+В дальнейшем работать напрямую с сессией не придется. 
+Клиенты для Twitter и Discord сами создадут сессию внутри себя.
+Вы можете использовать эту сессию для создания собственных оберток над API.
 
 Вот так можно создать сессию с прокси:
 ```python
@@ -27,13 +32,9 @@ async def main():
 
 Если вы работаете под Windows, то может потребоваться дополнительная настройка перед совершением запросов ([подробнее](https://curl-cffi.readthedocs.io/en/latest/faq/#not-working-on-windows-notimplementederror)):
 ```python
-import sys, asyncio
+from better_automation.utils import set_windows_selector_event_loop_policy
 
-def set_windows_event_loop_policy():
-    if sys.version_info >= (3, 8) and sys.platform.lower().startswith("win"):
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-set_windows_event_loop_policy()
+set_windows_selector_event_loop_policy()
 ```
 
 Если вы имеете проблемы с SSL сертификатами, то задайте параметр `verify=False` для сессии:
@@ -44,26 +45,22 @@ async with BaseAsyncSession(verify=False) as session:
 
 Пример работы сессией:
 ```python
-import sys
 import asyncio
 from pprint import pprint
 
 from better_automation.base import BaseAsyncSession
+from better_automation.utils import set_windows_selector_event_loop_policy
 
+set_windows_selector_event_loop_policy()
 
 PROXY = None  # "http://login:password@host:port"
-
-
-def set_windows_event_loop_policy():
-    if sys.version_info >= (3, 8) and sys.platform.lower().startswith("win"):
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 async def curl_cffi_example(proxy: str = None):
     async with BaseAsyncSession(proxy=proxy, verify=False) as session:
         response = await session.get("https://ipapi.co/json")
         response_json = response.json()
-        print(f"{response_json['ip']} {response_json['country_name']}")
+        print(f"{response_json["ip"]} {response_json["country_name"]}")
         
         response = await session.get("https://tls.browserleaks.com/json")
         response_json = response.json()
@@ -71,17 +68,57 @@ async def curl_cffi_example(proxy: str = None):
 
 
 if __name__ == '__main__':
-    set_windows_event_loop_policy()
     asyncio.run(curl_cffi_example(PROXY))
 ```
 
-В дальнейшем работать напрямую с сессией не придется. 
-Клиенты для Twitter и Discord сами создадут сессию внутри себя.
+## BaseAccount: работа с файлами
+Классы `TwitterAccount` и `DiscordAccount` наследуются от `BaseAccount`,
+а значит имеют методы `from_file()` и `to_file()` для работы с файлами.
+
+Допустим у нас есть файл `discords.txt` с Discord аккаунтами следующего формата: `auth_token;email;password`
+
+Вот так выглядит загрузка аккаунтов из такого файла:
+```python
+from better_automation.discord import DiscordAccount
+
+accounts = DiscordAccount.from_file("discords.txt", separator=";", fields=("auth_token", "email", "password"))
+```
+
+Допустим мы хотим изменить формат на следующий: `auth_token:password:email`
+
+Вот так выглядит сохранение аккаунтов в файл:
+```python
+from better_automation.discord import DiscordAccount
+
+accounts: list[DiscordAccount]
+DiscordAccount.to_file("discords.txt", accounts, separator=":", fields=("auth_token", "password", "email"))
+```
+
+## Интеграция better-proxy
+Чтобы работа с прокси была более приятная, рекомендую использовать библиотеку [better-proxy](https://github.com/alenkimov/better_proxy).
+Это позволит принимать прокси в любом формате и загружать их из файла одной строчкой кода.
+
+Для удобства можно создать контекстный менеджер, который по умолчанию отключает проверку SSL сертификатов и принимает прокси в формате better-proxy:
+```python
+from contextlib import asynccontextmanager
+
+from better_automation.discord import DiscordAccount, DiscordClient
+from better_automation.twitter import TwitterAccount, TwitterClient
+from better_proxy import Proxy
+
+@asynccontextmanager
+async def discord_client(account: DiscordAccount, proxy: Proxy = None, verify: bool = False, **kwargs):
+    async with DiscordClient(account, proxy=proxy.as_url if proxy else None, verify=verify, **kwargs) as discord:
+        yield discord
+
+@asynccontextmanager
+async def twitter_client(account: TwitterAccount, proxy: Proxy = None, verify: bool = False, **kwargs):
+    async with TwitterClient(account, proxy=proxy.as_url if proxy else None, verify=verify, **kwargs) as twitter:
+        yield twitter
+```
 
 ## Twitter
-Библиотека позволяет работать с неофициальным API Twitter.
-
-А именно:
+Библиотека позволяет работать с неофициальным API Twitter, а именно:
 - Привязывать сервисы (приложения).
 - Устанавливать статус аккаунта (бан, лок).
 - Загружать изображения на сервер и изменять баннер и аватарку.
@@ -95,37 +132,28 @@ if __name__ == '__main__':
 - Твиттить, ретвиттить с изображением и без.
 - Закреплять твиты.
 - Удалять твиты.
-- ...
+- И другое.
 
 ### TwitterAccount
-Аккаунт представляет собой контейнер для следующих данных:
-- Токены авторизации: `auth_token` и `x-csrf-token (ct0)`.
-- Имя пользователя (username) и пароль.
-- ID пользователя.
-
-Аккаунт можно создать из auth_token'а, cookies в формате JSON или base64:
+Аккаунт можно создать из auth_token'а, а также cookies в формате JSON или base64:
 ```python
 from better_automation.twitter import TwitterAccount
 
-# Аккаунту можно задать пароль (требуется для смены пароля)
 account = TwitterAccount("auth_token", password="password")
 account = TwitterAccount.from_cookies("JSON cookies")
 account = TwitterAccount.from_cookies("base64 cookies", base64=True)
 ```
 
-Аккаунты можно загрузить напрямую из файла:
-```python
-accounts = TwitterAccount.from_file("twitter_auth_tokens.txt")
-accounts = TwitterAccount.from_file("twitter_json_cookies.txt", cookies=True)
-accounts = TwitterAccount.from_file("twitter_base64_cookies.txt", cookies=True, base64=True)
-```
-
+#### Статус аккаунта
 После любого взаимодействия с Twitter устанавливается статус аккаунта:
 - `BAD_TOKEN` - Неверный токен.
 - `UNKNOWN` - Статус аккаунта не установлен.
 - `SUSPENDED` - Действие учетной записи приостановлено (бан).
 - `LOCKED` - Учетная запись заморожена (лок) (требуется прохождение капчи).
 - `GOOD` - Аккаунт в порядке.
+
+Не каждое взаимодействие с Twitter достоверно определяет статус аккаунта.
+Например, простой запрос данных об аккаунте честно вернет данные, даже если ваш аккаунт заморожен.
 
 ### TwitterClient
 Для взаимодействия с Twitter нужно создать экземпляр класса TwitterClient, передав в него аккаунт.
@@ -145,31 +173,9 @@ async with TwitterClient(account, proxy=proxy, verify=False) as twitter:
 ```
 
 ### Примеры работы
-Список доступных методов:
-- `bind_app(**bind_data) -> bind_code` Привязка (авторизация) стороннего сервиса
-- `upload_image(image) -> media_id`
-- `tweet(text, media_id)`
-- `repost(tweet_id)`
-- `quote(tweet_url, text, media_id)`
-- `reply(tweet_id, text, media_id)`
-- `like(tweet_id)`
-- `unlike(tweet_id)`
-- `follow(user_id)`
-- `unfollow(user_id)`
-- `pin_tweet(tweet_id)`
-- `delete_tweet(tweet_id)`
-- `change_password(password)`
-- `change_username(username)`
-- `update_profile(name, description, location)`
-- `update_profile_banner(media_id)`
-- `update_profile_avatar(media_id)`
-- `request_user_data(username) -> UserData`
-- `request_followings(user_id) -> list[UserData]`
-- `request_followers(user_id) -> list[UserData]`
-
-Демонстрационные скрипты (папка `examples/twitter`)`:
-- Установка статуса аккаунтов (проверка на блокировку, заморозку)
-- Голосование
+Демонстрационные скрипты:
+- [Установка статуса аккаунтов (проверка на блокировку, заморозку)](https://github.com/alenkimov/better_automation/blob/main/examples/twitter/account_checker.py)
+- [Голосование](https://github.com/alenkimov/better_automation/blob/main/examples/twitter/voter.py)
 
 Запрос информации о пользователе:
 ```python
@@ -290,19 +296,17 @@ for follower in followers:
 ```
 
 ## Discord
-Библиотека позволяет работать с неофициальным API Discord.
-
-А именно:
+Библиотека позволяет работать с неофициальным API Discord, а именно:
 - Привязывать сервисы (приложения).
+- Устанавливать статус токена (недействительный токен).
 - Ловить флаги аккаунта (спаммер, карантин).
-- Отправлять сообщения на сервер. Ставить реакции.
-- Нажимать кнопки на сервере. (не тестировалось!)
+- Заходить на сервер и всячески взаимодействовать с ним.
+- Запрашивать различную информацию.
+- И другое.
+
+Многие методы были перенесены из библиотеки [discum](https://github.com/Merubokkusu/Discord-S.C.U.M) и не тестировались.
 
 ### DiscordAccount
-Аккаунт представляет собой контейнер для следующих данных:
-- Токен авторизации.
-- Имя пользователя (username) и пароль.
-
 Аккаунт можно создать из токена авторизации:
 ```python
 from better_automation.discord import DiscordAccount
@@ -310,18 +314,14 @@ from better_automation.discord import DiscordAccount
 account = DiscordAccount("auth_token")
 ```
 
-Аккаунты можно загрузить напрямую из файла:
-```python
-accounts = DiscordAccount.from_file("discord_tokens.txt")
-```
-
+#### Статус аккаунта и флаги
 После любого взаимодействия с Discord устанавливается статус аккаунта:
-- `BAD_TOKEN` - Неверный токен.
 - `UNKNOWN` - Статус аккаунта не установлен.
-- `BANNED` - Бан.
+- `BAD_TOKEN` - Неверный токен или бан.
 - `GOOD` - Аккаунт в порядке.
 
-Баны сейчас не отлавливаются. Зато отлавливается статус `BAD_TOKEN`.
+Также аккаунт проверяется на флаги (спамер, на карантине).
+За состояние флагов отвечают переменные `DiscordAccount.is_spammer` и `DiscordAccount.is_quarantined`.
 
 ### DiscordClient
 Для взаимодействия с Discord нужно создать экземпляр класса DiscordClient, передав в него аккаунт.
@@ -341,17 +341,14 @@ async with DiscordClient(account, proxy=proxy, verify=False) as discord:
 ```
 
 ### Примеры работы
-Список доступных методов:
-- `bind_app(**bind_data) -> bind_code` Привязка (авторизация) стороннего сервиса
-- `request_messages` и `request_message`
-- `press_button`
-- `send_reaction`
-- `send_guild_chat_message`
+Демонстрационные скрипты:
+- [Discord Joiner](https://github.com/alenkimov/better_automation/blob/main/examples/discord/guild_joiner.py)
+- [Discord Token Checker](https://github.com/alenkimov/better_automation/blob/main/examples/discord/account_checker.py)
 
 Привязка сервиса (приложения):
 ```python
 # Изучите запросы сервиса и найдите подобные данные для авторизации (привязки):
-BIND_DATA = {
+bind_data = {
     'client_id': '986938000388796468',
     'response_type': 'code',
     'scope': 'identify guilds guilds.members.read',
@@ -368,7 +365,6 @@ print(f"Bind code: {bind_code}")
 ## Не реализовано
 - [ ] (Twitter) [Unlocker](https://github.com/0xStarLabs/StarLabs-Twitter/blob/master/self/utilities/solve_twitter_captcha.py)
 - [ ] (Twitter) Oauth старого типа
-- [ ] (Discord) Всё из [Discord-S.C.U.M](https://github.com/Merubokkusu/Discord-S.C.U.M)
 
 ## Credits
 - [0xStarLabs](https://github.com/0xStarLabs) / [StarLabs-Discord](https://github.com/0xStarLabs/StarLabs-Discord)

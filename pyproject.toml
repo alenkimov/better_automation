@@ -1,17 +1,22 @@
 [tool.poetry]
 name = "better-automation"
-version = "2.0.2"
+version = "2.1.0.b1"
 description = "Unofficial Twitter and Discord API"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
 packages = [{include = "better_automation"}]
 
 [tool.poetry.dependencies]
-python = ">=3.11"
-curl-cffi = ">=0.5.10"
-yarl = ">=1.9"
-tqdm = ">=4.66"
-pydantic = ">=2.0"
+python = "^3.11"
+curl-cffi = "^0.5"
+yarl = "^1.9"
+tqdm = "^4"
+pydantic = "^2"
+
+[tool.poetry.group.dev.dependencies]
+better-proxy = "0.2.2"
+playwright-stealth = "^1.0.6"
+discum = "1.4.1"
 
 [build-system]
 requires = ["poetry-core"]

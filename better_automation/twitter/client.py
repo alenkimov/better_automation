@@ -84,25 +84,20 @@ class TwitterClient(BaseClient):
             self,
             method,
             url,
-            params: dict = None,
-            headers: dict = None,
-            json: Any = None,
-            data: Any = None,
+            **kwargs,
     ) -> tuple[requests.Response, Any]:
-        cookies = {"auth_token": self.account.auth_token}
-        headers = headers or {}
+        cookies = kwargs["cookies"] = kwargs.get("cookies") or {}
+        headers = kwargs["headers"] = kwargs.get("headers") or {}
 
+        cookies["auth_token"] = self.account.auth_token
         if self.account.ct0:
             cookies["ct0"] = self.account.ct0
             headers["x-csrf-token"] = self.account.ct0
 
         response = await self.session.request(
-                method, url,
-                params=params,
-                json=json,
-                headers=headers,
-                cookies=cookies,
-                data=data,
+            method,
+            url,
+            **kwargs,
         )
         response_json = response.json()
 
@@ -122,9 +117,7 @@ class TwitterClient(BaseClient):
 
             if 353 in exc.api_codes and "ct0" in response.cookies:
                 self.account.ct0 = response.cookies["ct0"]
-                return await self.request(
-                    method, url, params, headers, json, data,
-                )
+                return await self.request(method, url, **kwargs)
 
             if 64 in exc.api_codes:
                 self.account.status = TwitterAccountStatus.SUSPENDED
@@ -143,9 +136,7 @@ class TwitterClient(BaseClient):
                 sleep_time = reset_time - int(time.time()) + 1
                 if sleep_time > 0:
                     await asyncio.sleep(sleep_time)
-                return await self.request(
-                    method, url, params, headers, json, data,
-                )
+                return await self.request(method, url, **kwargs)
             else:
                 raise RateLimited(response, response_json)
 
