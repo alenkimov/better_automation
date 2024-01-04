@@ -10,6 +10,7 @@ from itertools import cycle
 from pathlib import Path
 from typing import Iterable, Sequence
 from contextlib import asynccontextmanager
+from typing import AsyncContextManager
 
 from curl_cffi import requests
 from tqdm.asyncio import tqdm
@@ -40,7 +41,11 @@ FIELDS = ("auth_token", "password", "email")
 
 
 @asynccontextmanager
-async def discord_client(account: DiscordAccount, proxy: Proxy = None, verify: bool = False):
+async def discord_client(
+        account: DiscordAccount,
+        proxy: Proxy = None,
+        verify: bool = False,
+) -> AsyncContextManager[DiscordClient]:
     async with DiscordClient(account, proxy=proxy.as_url if proxy else None, verify=verify) as discord:
         yield discord
 

@@ -20,25 +20,14 @@ from ..utils import to_json
 from ..base import BaseClient
 from .account import TwitterAccount, TwitterAccountStatus
 from .models import TwitterUserData
-
-
-def remove_at_sign(username: str) -> str:
-    if username.startswith("@"):
-        return username[1:]
-    return username
+from .utils import remove_at_sign
 
 
 class TwitterClient(BaseClient):
     DEFAULT_HEADERS = {
         'authority': 'twitter.com',
-        'accept': '*/*',
-        'accept-language': 'uk',
-        'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
         'origin': 'https://twitter.com',
-        'sec-ch-ua-mobile': '?0',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-origin',
+        'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
         'x-twitter-active-user': 'yes',
         'x-twitter-auth-type': 'OAuth2Session',
         'x-twitter-client-language': 'en',
@@ -80,12 +69,7 @@ class TwitterClient(BaseClient):
         self.account = account
         self.wait_on_rate_limit = wait_on_rate_limit
 
-    async def request(
-            self,
-            method,
-            url,
-            **kwargs,
-    ) -> tuple[requests.Response, Any]:
+    async def _authenticated_request(self, method, url, **kwargs) -> requests.Response:
         cookies = kwargs["cookies"] = kwargs.get("cookies") or {}
         headers = kwargs["headers"] = kwargs.get("headers") or {}
 
@@ -94,11 +78,15 @@ class TwitterClient(BaseClient):
             cookies["ct0"] = self.account.ct0
             headers["x-csrf-token"] = self.account.ct0
 
-        response = await self.session.request(
+        return await self.session.request(method, url, **kwargs)
+
+    async def request(
+            self,
             method,
             url,
             **kwargs,
-        )
+    ) -> tuple[requests.Response, Any]:
+        response = await self._authenticated_request(method, url, **kwargs)
         response_json = response.json()
 
         if response.status_code == 400:
@@ -192,7 +180,7 @@ class TwitterClient(BaseClient):
         headers = {'content-type': 'application/x-www-form-urlencoded'}
         await self.request("POST", 'https://twitter.com/i/api/2/oauth2/authorize', headers=headers, data=data)
 
-    async def bind_app(
+    async def oauth_2(
             self,
             client_id: str,
             code_challenge: str,
@@ -221,6 +209,21 @@ class TwitterClient(BaseClient):
         )
         await self._confirm_binding(bind_code)
         return bind_code
+
+    async def request_oauth_html(self, oauth_token: str, **oauth_params) -> str:
+        """
+
+        :return: html страница привязки приложения (аутентификации) старого типа.
+        """
+        url = "https://api.twitter.com/oauth/authenticate"
+        oauth_params["oauth_token"] = oauth_token
+        response = await self._authenticated_request("GET", url, params=oauth_params)
+
+        if response.status_code == 403:
+            raise ValueError("The request token (oauth_token) for this page is invalid."
+                             " It may have already been used, or expired because it is too old.")
+
+        return response.text
 
     async def request_username(self):
         url = "https://twitter.com/i/api/1.1/account/settings.json"

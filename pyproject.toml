@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "better-automation"
-version = "2.1.0.b2"
+version = "2.1.0.b3"
 description = "Unofficial Twitter and Discord API"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
@@ -12,6 +12,8 @@ curl-cffi = "^0.5"
 yarl = "^1.9"
 tqdm = "^4"
 pydantic = "^2"
+beautifulsoup4 = "^4"
+lxml = "^5"
 
 [tool.poetry.group.dev.dependencies]
 better-proxy = "0.2.2"

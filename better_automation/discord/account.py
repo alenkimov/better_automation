@@ -22,3 +22,4 @@ class DiscordAccount(BaseAccount):
     is_spammer:     bool = False
     is_quarantined: bool = False
     phone:          str | None = None
+    # TODO TOTP_secret

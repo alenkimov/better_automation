@@ -6,6 +6,7 @@ pip install better-automation better-proxy
 
 import asyncio
 from contextlib import asynccontextmanager
+from typing import AsyncContextManager
 from itertools import cycle
 from pathlib import Path
 from typing import Iterable
@@ -32,7 +33,11 @@ INVITE_CODE_OR_URL = "https://discord.com/invite/zenlesszonezero"
 
 
 @asynccontextmanager
-async def discord_client(account: DiscordAccount, proxy: Proxy = None, verify: bool = False):
+async def discord_client(
+        account: DiscordAccount,
+        proxy: Proxy = None,
+        verify: bool = False,
+) -> AsyncContextManager[DiscordClient]:
     async with DiscordClient(account, proxy=proxy.as_url if proxy else None, verify=verify) as discord:
         yield discord
 

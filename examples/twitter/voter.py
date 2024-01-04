@@ -6,6 +6,7 @@ pip install better-automation better-proxy
 
 import asyncio
 from contextlib import asynccontextmanager
+from typing import AsyncContextManager
 from itertools import cycle
 from pathlib import Path
 from typing import Iterable
@@ -40,7 +41,11 @@ CHOICE_NUMBER = 1
 
 
 @asynccontextmanager
-async def twitter_client(account: TwitterAccount, proxy: Proxy = None, verify: bool = False):
+async def twitter_client(
+        account: TwitterAccount,
+        proxy: Proxy = None,
+        verify: bool = False,
+) -> AsyncContextManager[TwitterClient]:
     async with TwitterClient(account, proxy=proxy.as_url if proxy else None, verify=verify) as twitter:
         yield twitter
 

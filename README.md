@@ -101,18 +101,31 @@ DiscordAccount.to_file("discords.txt", accounts, separator=":", fields=("auth_to
 Для удобства можно создать контекстный менеджер, который по умолчанию отключает проверку SSL сертификатов и принимает прокси в формате better-proxy:
 ```python
 from contextlib import asynccontextmanager
+from typing import AsyncContextManager
 
 from better_automation.discord import DiscordAccount, DiscordClient
 from better_automation.twitter import TwitterAccount, TwitterClient
 from better_proxy import Proxy
 
+
 @asynccontextmanager
-async def discord_client(account: DiscordAccount, proxy: Proxy = None, verify: bool = False, **kwargs):
+async def discord_client(
+        account: DiscordAccount,
+        proxy: Proxy = None,
+        verify: bool = False,
+        **kwargs,
+) -> AsyncContextManager[DiscordClient]:
     async with DiscordClient(account, proxy=proxy.as_url if proxy else None, verify=verify, **kwargs) as discord:
         yield discord
 
+
 @asynccontextmanager
-async def twitter_client(account: TwitterAccount, proxy: Proxy = None, verify: bool = False, **kwargs):
+async def twitter_client(
+        account: TwitterAccount,
+        proxy: Proxy = None,
+        verify: bool = False,
+        **kwargs,
+) -> AsyncContextManager[TwitterClient]:
     async with TwitterClient(account, proxy=proxy.as_url if proxy else None, verify=verify, **kwargs) as twitter:
         yield twitter
 ```
@@ -225,6 +238,7 @@ banner_image_url = await twitter.update_profile_banner(media_id)
 ```
 
 Привязка сервиса (приложения):
+
 ```python
 # Изучите запросы сервиса и найдите подобные данные для авторизации (привязки):
 bind_data = {
@@ -237,7 +251,7 @@ bind_data = {
     'code_challenge_method': 'plain'
 }
 
-bind_code = await twitter.bind_app(**bind_data)
+bind_code = await twitter.oauth_2(**bind_data)
 # Передайте код авторизации (привязки) сервису.
 # Сервис также может потребовать state, если он динамический.
 ```
@@ -346,6 +360,7 @@ async with DiscordClient(account, proxy=proxy, verify=False) as discord:
 - [Discord Token Checker](https://github.com/alenkimov/better_automation/blob/main/examples/discord/account_checker.py)
 
 Привязка сервиса (приложения):
+
 ```python
 # Изучите запросы сервиса и найдите подобные данные для авторизации (привязки):
 bind_data = {
@@ -355,7 +370,7 @@ bind_data = {
 }
 
 # Привязка приложения
-bind_code = await discord.bind_app(**bind_data)
+bind_code = await discord.oauth_2(**bind_data)
 print(f"Bind code: {bind_code}")
 
 # Передайте код авторизации (привязки) сервису.

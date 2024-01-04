@@ -22,6 +22,8 @@ from .errors import (
 )
 from ..base import BaseClient
 
+# from .gateway.gateway import GatewayServer
+
 
 def generate_nonce() -> str:
     return str((int(time()) * 1000 - 1420070400000) * 4194304)
@@ -48,15 +50,8 @@ class DiscordClient(BaseClient):
     BASE_API_URL = f"{BASE_URL}/api/v{API_VERSION}"
     DEFAULT_HEADERS = {
         "authority": "discord.com",
-        "accept": "*/*",
         "origin": "https://discord.com",
         "connection": "keep-alive",
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Windows"',
-        "sec-ch-ua": '"Chromium";v="110", "Not A(Brand";v="24", "Google Chrome";v="110"',
-        "sec-fetch-dest": "empty",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-origin",
         "x-debug-options": "bugReporterEnabled",
     }
     CLIENT_BUILD_NUMBER = 255423
@@ -76,6 +71,10 @@ class DiscordClient(BaseClient):
             "x-discord-locale": locale,
             "accept-language": f"{locale},{locale.split('-')[0]};q=0.9",
         })
+
+
+        # self.gateway = GatewayServer(self.websocket_url, self.__user_token, self.x_super_properties, self.s,
+        #                              self.discord, self.log)
 
     async def request(
             self,
