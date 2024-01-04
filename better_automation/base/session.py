@@ -27,14 +27,10 @@ class BaseAsyncSession(requests.AsyncSession):
             **session_kwargs,
     ):
         proxies = {"http": proxy, "https": proxy}
-        headers = session_kwargs.pop("headers", {})
+        headers = session_kwargs["headers"] = session_kwargs.get("headers") or {}
         headers.update(self.DEFAULT_HEADERS)
         session_kwargs["impersonate"] = session_kwargs.get("impersonate") or self.DEFAULT_IMPERSONATE
-        super().__init__(
-            proxies=proxies,
-            headers=headers,
-            **session_kwargs,
-        )
+        super().__init__(proxies=proxies, **session_kwargs)
 
     @property
     def user_agent(self) -> str:
