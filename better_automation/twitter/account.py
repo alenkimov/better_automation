@@ -26,15 +26,6 @@ class TwitterAccount(BaseAccount):
     ct0: str | None = None
     status: TwitterAccountStatus = TwitterAccountStatus.UNKNOWN
 
-    def __init__(
-            self,
-            *args,
-            ct0: str = None,
-            **kwargs,
-    ):
-        super().__init__(*args, **kwargs)
-        self.ct0 = ct0
-
     @classmethod
     def from_cookies(
             cls,
@@ -62,14 +53,6 @@ class TwitterAccount(BaseAccount):
 
         ct0 = kwargs.pop("ct0", None) or ct0
 
-        account = cls(auth_token, ct0=ct0, **kwargs)
+        account = cls(auth_token, **kwargs)
+        account.ct0 = ct0
         return account
-
-    @classmethod
-    def from_file(
-            cls,
-            *args,
-            fields: tuple[str] = ("auth_token", "password", "email", "username", "ct0"),
-            **kwargs,
-    ) -> list["TwitterAccount"]:
-        return super().from_file(*args, fields=fields, *kwargs)
