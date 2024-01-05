@@ -1,14 +1,17 @@
 from bs4 import BeautifulSoup
 
 
-def parse_oauth_html(html: str) -> tuple[str, str]:
-    """
-    :return: redirect_url, authenticity_token
-    """
+def parse_oauth_html(html: str) -> dict:
     soup = BeautifulSoup(html, "lxml")
-    redirect_url = soup.find("a", text="click here to continue").get("href")
-    authenticity_token = soup.find("input", attrs={"name": "authenticity_token"}).get("value")
-    return redirect_url, authenticity_token
+    result = {
+        "oauth_token": soup.find("input", attrs={"name": "authenticity_token"}).get("value"),
+        "authenticity_token": soup.find("input", attrs={"name": "authenticity_token"}).get("value"),
+    }
+    redirect_url_element = soup.find("a", text="click here to continue")
+    if redirect_url_element: result["redirect_url"] = redirect_url_element.get("href")
+    redirect_after_login_element = soup.find("input", attrs={"name": "redirect_after_login"})
+    if redirect_after_login_element: result["redirect_after_login_url"] = redirect_after_login_element.get("value")
+    return result
 
 
 def remove_at_sign(username: str) -> str:

@@ -6,6 +6,7 @@ from time import time
 
 from curl_cffi import requests
 from yarl import URL
+from bs4 import BeautifulSoup
 
 from better_automation.twitter.errors import (
     HTTPException,
@@ -20,7 +21,7 @@ from ..utils import to_json
 from ..base import BaseClient
 from .account import TwitterAccount, TwitterAccountStatus
 from .models import TwitterUserData
-from .utils import remove_at_sign
+from .utils import remove_at_sign, parse_oauth_html
 
 
 class TwitterClient(BaseClient):
@@ -148,7 +149,7 @@ class TwitterClient(BaseClient):
         self.account.status = TwitterAccountStatus.GOOD
         return response, response_json
 
-    async def _request_bind_code(
+    async def _request_oauth_2_auth_code(
             self,
             client_id: str,
             code_challenge: str,
@@ -169,13 +170,13 @@ class TwitterClient(BaseClient):
             "redirect_uri": redirect_uri,
         }
         response, response_json = await self.request("GET", url, params=querystring)
-        bind_code = response_json["auth_code"]
-        return bind_code
+        auth_code = response_json["auth_code"]
+        return auth_code
 
-    async def _confirm_binding(self, bind_code: str):
+    async def _confirm_oauth_2(self, auth_code: str):
         data = {
             'approval': 'true',
-            'code': bind_code,
+            'code': auth_code,
         }
         headers = {'content-type': 'application/x-www-form-urlencoded'}
         await self.request("POST", 'https://twitter.com/i/api/2/oauth2/authorize', headers=headers, data=data)
@@ -204,13 +205,13 @@ class TwitterClient(BaseClient):
         :param response_type: Тип ответа, который ожидается от сервера авторизации.
         :return: Код авторизации (привязки).
         """
-        bind_code = await self._request_bind_code(
+        auth_code = await self._request_oauth_2_auth_code(
             client_id, code_challenge, state, redirect_uri, code_challenge_method, scope, response_type,
         )
-        await self._confirm_binding(bind_code)
-        return bind_code
+        await self._confirm_oauth_2(auth_code)
+        return auth_code
 
-    async def request_oauth_html(self, oauth_token: str, **oauth_params) -> str:
+    async def _request_oauth_html(self, oauth_token: str, **oauth_params) -> str:
         """
 
         :return: html страница привязки приложения (аутентификации) старого типа.
@@ -224,6 +225,26 @@ class TwitterClient(BaseClient):
                              " It may have already been used, or expired because it is too old.")
 
         return response.text
+
+    async def _confirm_oauth(self, oauth_token: str, authenticity_token: str, redirect_after_login_url: str):
+        url = "https://api.twitter.com/oauth/authorize"
+        params = {
+            "redirect_after_login": redirect_after_login_url,
+            "authenticity_token": authenticity_token,
+            "oauth_token": oauth_token,
+        }
+        response = await self._authenticated_request("POST", url, data=params)
+        return response.text
+
+    async def oauth(self, oauth_token: str, **oauth_params) -> tuple[str, str]:
+        """
+        :return: redirect_url, authenticity_token
+        """
+        oauth_data = parse_oauth_html(await self._request_oauth_html(oauth_token, **oauth_params))
+        if "redirect_after_login_url" in oauth_data:
+            oauth_data = parse_oauth_html(await self._confirm_oauth(
+                oauth_token, oauth_data["authenticity_token"], oauth_data["redirect_after_login_url"]))
+        return oauth_data["redirect_url"], oauth_data["authenticity_token"]
 
     async def request_username(self):
         url = "https://twitter.com/i/api/1.1/account/settings.json"
