@@ -51,7 +51,6 @@ class DiscordClient(BaseClient):
     DEFAULT_HEADERS = {
         "authority": "discord.com",
         "origin": "https://discord.com",
-        "connection": "keep-alive",
         "x-debug-options": "bugReporterEnabled",
     }
     CLIENT_BUILD_NUMBER = 255423

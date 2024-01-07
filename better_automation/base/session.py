@@ -12,6 +12,8 @@ class BaseAsyncSession(requests.AsyncSession):
         "sec-fetch-dest": "empty",
         "sec-fetch-mode": "cors",
         "sec-fetch-site": "same-origin",
+        "connection": "keep-alive",
+        # "accept-encoding": "gzip, deflate, br",
     }
     DEFAULT_IMPERSONATE = requests.BrowserType.chrome110
     """

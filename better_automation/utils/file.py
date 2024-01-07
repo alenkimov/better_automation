@@ -4,6 +4,8 @@ import tomllib
 from pathlib import Path
 from typing import Iterable
 
+from bs4 import BeautifulSoup
+
 
 def copy_file(source_path: Path | str, destination_path: Path | str):
     destination_path = Path(destination_path)
@@ -34,8 +36,15 @@ def load_json(filepath: Path | str) -> dict:
 
 def write_json(filepath: Path | str, data):
     with open(filepath, "w") as file:
-        json.dump(data, file, indent=4)
+        json.dump(data, file, indent=4, separators=(',', ':'), ensure_ascii=True, default=str)
 
 
 def to_json(obj) -> str:
-    return json.dumps(obj, separators=(',', ':'), ensure_ascii=True)
+    return json.dumps(obj, separators=(',', ':'), ensure_ascii=True, default=str)
+
+
+def write_html(filepath: str | Path, html: str):
+    soup = BeautifulSoup(html, "lxml")
+    pretty_html = soup.prettify()
+    with open(filepath, "w") as file:
+        file.write(pretty_html)

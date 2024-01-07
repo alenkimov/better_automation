@@ -46,10 +46,9 @@ class HTTPException(DiscordException):
             self,
             response: requests.Response,
             data: str | dict[str, Any] | None,
-            custom_error_message: str = None,
+            custom_exception_message: str = None,
     ):
         self.response = response
-        self.status = response.status_code
         if isinstance(data, dict):
             self.code = data.get("code", 0)
             base = data.get("message", "")
@@ -65,11 +64,10 @@ class HTTPException(DiscordException):
             self.text = data or ""
             self.code = 0
 
-        error_message = f"{self.response.status_code} ({self.code})"
+        exception_message = f"{self.response.status_code} ({self.code})"
         if len(self.text):
-            error_message = f"{error_message}: {self.text}"
-
-        super().__init__(custom_error_message or error_message)
+            exception_message = f"{exception_message}: {self.text}"
+        super().__init__(custom_exception_message or exception_message)
 
 
 class BadRequest(HTTPException):
@@ -89,7 +87,7 @@ class CaptchaRequired(BadRequest):
         self.service = data["captcha_service"]
         super().__init__(
             response, data,
-            custom_error_message=f"You need to solve {self.service} to perform this action.",
+            custom_exception_message=f"You need to solve {self.service} to perform this action.",
         )
 
 
@@ -129,7 +127,7 @@ class RateLimited(HTTPException):
         self.retry_after = data["retry_after"]
         super().__init__(
             response, data,
-            custom_error_message=f"Rate limited. Retry in {self.retry_after:.2f} seconds.",
+            custom_exception_message=f"Rate limited. Retry in {self.retry_after:.2f} seconds.",
         )
 
 
