@@ -18,3 +18,10 @@ def remove_at_sign(username: str) -> str:
     if username.startswith("@"):
         return username[1:]
     return username
+
+
+def tweet_url(username: str, tweet_id: int) -> str:
+    """
+    :return: Tweet URL
+    """
+    return f"https://x.com/{username}/status/{tweet_id}"

@@ -33,7 +33,11 @@ class HTTPException(TwitterException):
         self.api_messages: list[str] = []
 
         if response_json is None:
-            super().__init__(f"{response.status_code}")
+            exception_message = f"{response.status_code}"
+            if response.status_code == 429:
+                exception_message = (f"{response.status_code} Rate limit exceeded."
+                                     f"\nSet TwitterClient(wait_on_rate_limit=True) to ignore this exception.")
+            super().__init__(exception_message)
             return
 
         errors = response_json.get("errors", [])

@@ -18,7 +18,7 @@ from tqdm.asyncio import tqdm
 from better_automation.discord import DiscordAccount, DiscordClient
 from better_automation.discord.account import DiscordAccountStatus
 from better_automation.discord.errors import DiscordException
-from better_automation.utils import set_windows_selector_event_loop_policy, bounded_gather
+from better_automation.utils import set_windows_selector_event_loop_policy, gather
 from better_proxy import Proxy
 
 set_windows_selector_event_loop_policy()
@@ -130,7 +130,7 @@ async def check_accounts(
     if not tasks: return
 
     try:
-        await bounded_gather(*tasks, max_tasks=max_tasks, file=sys.stdout)
+        await gather(*tasks, max_tasks=max_tasks, file=sys.stdout)
     finally:
         sorted_accounts = sort_accounts(accounts)
         save_sorted_accounts(output_dir, sorted_accounts, separator, fields)

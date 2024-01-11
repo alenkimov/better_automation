@@ -25,6 +25,7 @@ class TwitterAccount(BaseAccount):
     id: int | None = None
     ct0: str | None = None
     status: TwitterAccountStatus = TwitterAccountStatus.UNKNOWN
+    # TODO user_data
 
     @classmethod
     def from_cookies(

@@ -41,7 +41,7 @@ class BaseAccount(BaseModel):
         return f"{start}**{end}"
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} auth_token={self.short_auth_token}>"
+        return f"{self.__class__.__name__}(auth_token={self.short_auth_token}, username={self.username})"
 
     def __str__(self):
         return self.short_auth_token
@@ -53,7 +53,7 @@ class BaseAccount(BaseModel):
             *,
             separator: str = ":",
             fields: Sequence[str] = ("auth_token", "password", "email", "username"),
-    ) -> list["BaseAccount"]:
+    ):
         """
         :param filepath: Путь до файла с данными об аккаунтах.
         :param separator: Разделитель между данными в строке.

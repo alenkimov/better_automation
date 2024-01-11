@@ -10,7 +10,7 @@ from .file import (
 from .asyncio import (
     set_windows_selector_event_loop_policy,
     curry_async,
-    bounded_gather,
+    gather,
 )
 
 
@@ -24,5 +24,5 @@ __all__ = [
     "to_json",
     "set_windows_selector_event_loop_policy",
     "curry_async",
-    "bounded_gather",
+    "gather",
 ]

@@ -1,12 +1,10 @@
 import asyncio
 import base64
-import time
 from typing import Any, Literal
 from time import time
 
 from curl_cffi import requests
 from yarl import URL
-from bs4 import BeautifulSoup
 
 from better_automation.twitter.errors import (
     HTTPException,
@@ -81,6 +79,11 @@ class TwitterClient(BaseClient):
 
         return await self.session.request(method, url, **kwargs)
 
+    # TODO curl_cffi.requests.errors.RequestsError:
+    #   Failed to perform, ErrCode: 35, Reason:
+    #   'BoringSSL SSL_connect: Connection was reset in connection to twitter.com:443 '
+    #   This may be a libcurl error, See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+    #   Эта ошибка означает, что твиттер не ворк и нужны прокси
     async def request(
             self,
             method,
@@ -88,6 +91,16 @@ class TwitterClient(BaseClient):
             **kwargs,
     ) -> tuple[requests.Response, Any]:
         response = await self._authenticated_request(method, url, **kwargs)
+
+        if response.status_code == 429:
+            if self.wait_on_rate_limit:
+                reset_time = int(response.headers["x-rate-limit-reset"])
+                sleep_time = reset_time - int(time()) + 1
+                if sleep_time > 0:
+                    await asyncio.sleep(sleep_time)
+                return await self.request(method, url, **kwargs)
+            raise RateLimited(response, None)
+
         response_json = response.json()
 
         if response.status_code == 400:
@@ -118,16 +131,6 @@ class TwitterClient(BaseClient):
 
         if response.status_code == 404:
             raise NotFound(response, response_json)
-
-        if response.status_code == 429:
-            if self.wait_on_rate_limit:
-                reset_time = int(response.headers["x-rate-limit-reset"])
-                sleep_time = reset_time - int(time.time()) + 1
-                if sleep_time > 0:
-                    await asyncio.sleep(sleep_time)
-                return await self.request(method, url, **kwargs)
-            else:
-                raise RateLimited(response, response_json)
 
         if response.status_code >= 500:
             raise TwitterServerError(response, response_json)

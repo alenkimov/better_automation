@@ -1,4 +1,5 @@
 import datetime
+from enum import IntEnum
 from functools import wraps
 from random import choice
 from typing import Any, Literal
@@ -21,8 +22,6 @@ from .errors import (
     DiscordServerError,
 )
 from ..base import BaseClient
-
-# from .gateway.gateway import GatewayServer
 
 
 def generate_nonce() -> str:
@@ -70,10 +69,6 @@ class DiscordClient(BaseClient):
             "x-discord-locale": locale,
             "accept-language": f"{locale},{locale.split('-')[0]};q=0.9",
         })
-
-
-        # self.gateway = GatewayServer(self.websocket_url, self.__user_token, self.x_super_properties, self.s,
-        #                              self.discord, self.log)
 
     async def request(
             self,

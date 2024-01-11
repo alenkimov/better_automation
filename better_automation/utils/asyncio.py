@@ -1,3 +1,4 @@
+import random
 import sys
 import asyncio
 
@@ -19,17 +20,22 @@ def curry_async(async_func):
     return curried
 
 
-async def bounded_gather(*fs, max_tasks=None, **tqdm_kwargs):
-    if max_tasks is None:
-        return await tqdm.gather(fs, **tqdm_kwargs)
+async def gather(*fs, max_tasks: int = None, delay: tuple[int, int] = (0, 0), **tqdm_kwargs):
+    if max_tasks is None and delay == (0, 0):
+        return await tqdm.gather(*fs, **tqdm_kwargs)
 
-    semaphore = asyncio.Semaphore(max_tasks)
+    semaphore = asyncio.Semaphore(max_tasks) if max_tasks is not None else None
 
     async def worker(fn):
-        async with semaphore:
+        async def task():
+            if delay != (0, 0):
+                await asyncio.sleep(random.uniform(*delay))
             return await fn
 
+        if semaphore:
+            async with semaphore:
+                return await task()
+        else:
+            return await task()
+
     return await tqdm.gather(*(worker(fn) for fn in fs), **tqdm_kwargs)
-
-
-

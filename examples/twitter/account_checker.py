@@ -22,7 +22,7 @@ from better_automation.utils import (
     set_windows_selector_event_loop_policy,
     load_lines,
     write_lines,
-    bounded_gather,
+    gather,
 )
 from better_proxy import Proxy
 
@@ -114,7 +114,7 @@ async def check_accounts(
         if account.status == TwitterAccountStatus.UNKNOWN:
             tasks.append(establish_account_status(account, proxy=proxy))
     try:
-        await bounded_gather(*tasks, max_tasks=MAX_TASKS, file=sys.stdout)
+        await gather(*tasks, max_tasks=MAX_TASKS, file=sys.stdout)
     finally:
         sorted_accounts = sort_accounts(accounts)
         save_sorted_accounts_with_additional_data(sorted_accounts)
