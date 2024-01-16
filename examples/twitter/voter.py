@@ -12,12 +12,7 @@ from pathlib import Path
 from typing import Iterable
 
 from better_automation.twitter import TwitterAccount, TwitterClient, TwitterAccountStatus
-from better_automation.utils import (
-    set_windows_selector_event_loop_policy,
-)
 from better_proxy import Proxy
-
-set_windows_selector_event_loop_policy()
 
 TwitterAccountWithAdditionalData = tuple[str, TwitterAccount]
 SortedAccounts = dict[TwitterAccountStatus: TwitterAccountWithAdditionalData]

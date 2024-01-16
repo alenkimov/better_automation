@@ -30,13 +30,6 @@ async def main():
     ...
 ```
 
-Если вы работаете под Windows, то может потребоваться дополнительная настройка перед совершением запросов ([подробнее](https://curl-cffi.readthedocs.io/en/latest/faq/#not-working-on-windows-notimplementederror)):
-```python
-from better_automation.utils import set_windows_selector_event_loop_policy
-
-set_windows_selector_event_loop_policy()
-```
-
 Если вы имеете проблемы с SSL сертификатами, то задайте параметр `verify=False` для сессии:
 ```python
 async with BaseAsyncSession(verify=False) as session:
@@ -49,9 +42,6 @@ import asyncio
 from pprint import pprint
 
 from better_automation.base import BaseAsyncSession
-from better_automation.utils import set_windows_selector_event_loop_policy
-
-set_windows_selector_event_loop_policy()
 
 PROXY = None  # "http://login:password@host:port"
 

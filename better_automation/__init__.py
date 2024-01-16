@@ -1,4 +1,4 @@
-from . import utils, base, twitter, discord
+from . import utils, base, twitter, discord, googleapis
 
 
 __all__ = [
@@ -6,4 +6,5 @@ __all__ = [
     "base",
     "twitter",
     "discord",
+    "googleapis",
 ]

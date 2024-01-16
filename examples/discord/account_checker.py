@@ -18,10 +18,8 @@ from tqdm.asyncio import tqdm
 from better_automation.discord import DiscordAccount, DiscordClient
 from better_automation.discord.account import DiscordAccountStatus
 from better_automation.discord.errors import DiscordException
-from better_automation.utils import set_windows_selector_event_loop_policy, gather
+from better_automation.utils import gather
 from better_proxy import Proxy
-
-set_windows_selector_event_loop_policy()
 
 SortedDiscordAccounts = dict[DiscordAccountStatus: list[DiscordAccount]]
 

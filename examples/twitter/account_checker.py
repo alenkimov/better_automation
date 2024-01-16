@@ -17,16 +17,8 @@ from curl_cffi import requests
 from tqdm.asyncio import tqdm
 
 from better_automation.twitter import TwitterAccount, TwitterClient, TwitterAccountStatus
-from better_automation.twitter.errors import HTTPException as TwitterException
-from better_automation.utils import (
-    set_windows_selector_event_loop_policy,
-    load_lines,
-    write_lines,
-    gather,
-)
+from better_automation.utils import load_lines, write_lines, gather
 from better_proxy import Proxy
-
-set_windows_selector_event_loop_policy()
 
 TwitterAccountWithAdditionalData = tuple[str, TwitterAccount]
 SortedAccounts = dict[TwitterAccountStatus: TwitterAccountWithAdditionalData]

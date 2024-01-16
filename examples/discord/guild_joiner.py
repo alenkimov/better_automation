@@ -13,10 +13,7 @@ from typing import Iterable
 
 from better_automation.discord import DiscordAccount, DiscordClient, DiscordAccountStatus, to_invite_code
 from better_automation.discord.errors import DiscordException
-from better_automation.utils import set_windows_selector_event_loop_policy
 from better_proxy import Proxy
-
-set_windows_selector_event_loop_policy()
 
 INPUT_OUTPUT_DIR = Path("input-output")
 INPUT_OUTPUT_DIR.mkdir(exist_ok=True)

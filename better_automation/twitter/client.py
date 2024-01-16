@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import warnings
 from typing import Any, Literal
 from time import time
 
@@ -77,20 +78,13 @@ class TwitterClient(BaseClient):
             cookies["ct0"] = self.account.ct0
             headers["x-csrf-token"] = self.account.ct0
 
-        return await self.session.request(method, url, **kwargs)
-
-    # TODO curl_cffi.requests.errors.RequestsError:
-    #   Failed to perform, ErrCode: 35, Reason:
-    #   'BoringSSL SSL_connect: Connection was reset in connection to twitter.com:443 '
-    #   This may be a libcurl error, See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
-    #   Эта ошибка означает, что твиттер не ворк и нужны прокси
-    async def request(
-            self,
-            method,
-            url,
-            **kwargs,
-    ) -> tuple[requests.Response, Any]:
-        response = await self._authenticated_request(method, url, **kwargs)
+        try:
+            response = await self.session.request(method, url, **kwargs)
+        except requests.errors.RequestsError as exc:
+            if exc.code == 35:
+                msg = "The IP address may have been blocked by Twitter. Blocked countries: Russia. " + str(exc)
+                raise requests.errors.RequestsError(msg, 35, exc.response)
+            raise
 
         if response.status_code == 429:
             if self.wait_on_rate_limit:
@@ -98,9 +92,18 @@ class TwitterClient(BaseClient):
                 sleep_time = reset_time - int(time()) + 1
                 if sleep_time > 0:
                     await asyncio.sleep(sleep_time)
-                return await self.request(method, url, **kwargs)
+                return await self._authenticated_request(method, url, **kwargs)
             raise RateLimited(response, None)
 
+        return response
+
+    async def request(
+            self,
+            method,
+            url,
+            **kwargs,
+    ) -> tuple[requests.Response, Any]:
+        response = await self._authenticated_request(method, url, **kwargs)
         response_json = response.json()
 
         if response.status_code == 400:

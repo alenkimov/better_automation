@@ -87,7 +87,8 @@ class CaptchaRequired(BadRequest):
         self.service = data["captcha_service"]
         super().__init__(
             response, data,
-            custom_exception_message=f"You need to solve {self.service} to perform this action.",
+            custom_exception_message=f"You need to solve {self.service} to perform this action."
+                                     f"\nBinding a phone number can reduce the chance of captchas appearing.",
         )
 
 

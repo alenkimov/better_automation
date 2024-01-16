@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "better-automation"
-version = "2.1.0.b7"
+version = "2.1.0.b8"
 description = "Unofficial Twitter and Discord API"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
@@ -8,7 +8,8 @@ packages = [{include = "better_automation"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-curl-cffi = "^0.5"
+curl_cffi = {version = "0.6.0b7", allow-prereleases = true}
+playwright-stealth = "^1"
 yarl = "^1.9"
 tqdm = "^4"
 pydantic = "^2"
@@ -17,7 +18,7 @@ lxml = "^5"
 
 [tool.poetry.group.dev.dependencies]
 better-proxy = "0.2.2"
-playwright-stealth = "^1.0.6"
+setuptools = "^69"
 discum = "1.4.1"
 
 [build-system]
