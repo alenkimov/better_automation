@@ -1,0 +1,4 @@
+[submodule "discord_py_self"]
+	path = discord_py_self
+	url = https://github.com/dolfies/discord.py-self.git
+	branch = refactor/tls
