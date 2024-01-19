@@ -1,4 +1,9 @@
-from . import utils, base, twitter, discord, googleapis
+import warnings
+from . import utils, base, twitter, discord, googleapis, google
+
+
+# HACK: Ignore event loop warnings from curl_cffi
+warnings.filterwarnings('ignore', module='curl_cffi')
 
 
 __all__ = [
@@ -7,4 +12,5 @@ __all__ = [
     "twitter",
     "discord",
     "googleapis",
+    "google",
 ]

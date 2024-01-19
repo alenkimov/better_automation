@@ -1,11 +1,11 @@
 from .account import BaseAccount
 from .client import BaseClient
 from .session import BaseAsyncSession
-from .browser import BaseBrowser
+from .playwright_ import BasePlaywrightBrowser
 
 __all__ = [
     "BaseAccount",
     "BaseClient",
     "BaseAsyncSession",
-    "BaseBrowser",
+    "BasePlaywrightBrowser",
 ]

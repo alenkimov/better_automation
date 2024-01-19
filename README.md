@@ -7,11 +7,17 @@
 pip install better-automation
 ```
 
-- Unofficial Twitter and Discord API
+- Unofficial Twitter, Discord, Google API
 
 More libraries of the family:
 - [better-web3](https://github.com/alenkimov/better_web3)
 - [better-proxy](https://github.com/alenkimov/better_proxy)
+
+Demo scripts:
+- [Discord Joiner](https://github.com/alenkimov/better_automation/blob/main/examples/discord/guild_joiner.py)
+- [Discord Token Checker](https://github.com/alenkimov/better_automation/blob/main/examples/discord/account_checker.py)
+- [Twitter Token Checker](https://github.com/alenkimov/better_automation/blob/main/examples/twitter/account_checker.py)
+- [Twitter Voter](https://github.com/alenkimov/better_automation/blob/main/examples/twitter/voter.py)
 
 
 ## BaseSession
@@ -345,10 +351,6 @@ async with DiscordClient(account, proxy=proxy, verify=False) as discord:
 ```
 
 ### Примеры работы
-Демонстрационные скрипты:
-- [Discord Joiner](https://github.com/alenkimov/better_automation/blob/main/examples/discord/guild_joiner.py)
-- [Discord Token Checker](https://github.com/alenkimov/better_automation/blob/main/examples/discord/account_checker.py)
-
 Привязка сервиса (приложения):
 
 ```python
@@ -367,14 +369,9 @@ print(f"Bind code: {bind_code}")
 # Сервис также может потребовать state, если он динамический.
 ```
 
-## Не реализовано
-- [ ] (Twitter) [Unlocker](https://github.com/0xStarLabs/StarLabs-Twitter/blob/master/self/utilities/solve_twitter_captcha.py)
-- [ ] (Twitter) Oauth старого типа
-
 ## Credits
 - [0xStarLabs](https://github.com/0xStarLabs) / [StarLabs-Discord](https://github.com/0xStarLabs/StarLabs-Discord)
 - [0xStarLabs](https://github.com/0xStarLabs) / [StarLabs-Twitter](https://github.com/0xStarLabs/StarLabs-Twitter)
-- [Merubokkusu](https://github.com/Merubokkusu) / [Discord-S.C.U.M](https://github.com/Merubokkusu/Discord-S.C.U.M)
 - [makarworld](https://github.com/makarworld) / [TwitterBot](https://github.com/makarworld/TwitterBot)
-- [Rapptz](https://github.com/Rapptz) / [discord.py](https://github.com/Rapptz/discord.py)
+- [dolfies](https://github.com/dolfies) / [discord.py-self](https://github.com/dolfies/discord.py-self)
 - [tweepy](https://github.com/tweepy) / [tweepy](https://github.com/tweepy/tweepy)

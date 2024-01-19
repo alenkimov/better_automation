@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "better-automation"
-version = "2.1.0.b8"
-description = "Unofficial Twitter and Discord API"
+version = "2.1.0.b9"
+description = "Unofficial Twitter, Discord, googleapis API"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
 packages = [{include = "better_automation"}]
@@ -9,7 +9,11 @@ packages = [{include = "better_automation"}]
 [tool.poetry.dependencies]
 python = "^3.11"
 curl_cffi = {version = "0.6.0b7", allow-prereleases = true}
+discord-py-self = {git = "https://github.com/dolfies/discord.py-self.git", rev = "refactor/tls"}
+better-proxy = "0.5.0"
+playwright = "^1"
 playwright-stealth = "^1"
+pillow = "^10"
 yarl = "^1.9"
 tqdm = "^4"
 pydantic = "^2"
@@ -17,9 +21,7 @@ beautifulsoup4 = "^4"
 lxml = "^5"
 
 [tool.poetry.group.dev.dependencies]
-better-proxy = "0.2.2"
 setuptools = "^69"
-discum = "1.4.1"
 
 [build-system]
 requires = ["poetry-core"]
