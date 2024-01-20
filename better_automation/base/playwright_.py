@@ -48,7 +48,7 @@ class BasePlaywrightBrowser:
             proxy: str | Proxy = None,
             **context_kwargs,
     ):
-        proxy: Proxy | None = Proxy.from_str(proxy) if proxy else None
+        proxy = Proxy.from_str(proxy).as_playwright_proxy if proxy else None
         context = await self._browser.new_context(proxy=proxy, **context_kwargs)
         context.set_default_timeout(self.default_timeout)
         yield context
