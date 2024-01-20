@@ -20,10 +20,12 @@ class GooglePlaywrightBrowserContext:
             account: GoogleAccount,
             *,
             stealth: bool = False,
+            delay: int = 2_000,
     ):
         self._context = context
         self.account = account
         self.stealth = stealth
+        self.delay = delay
 
         self._logged_in: bool = False
         self._needs_recovery_email: bool = False
@@ -46,7 +48,7 @@ class GooglePlaywrightBrowserContext:
 
         # На новых аккаунтах может выскакивать назойливое напоминание
         try:
-            await page.get_by_text("Not now").click(timeout=5_000)
+            await page.get_by_text("Not now").click(timeout=self.delay)
         except TimeoutError:
             pass
 
@@ -66,8 +68,12 @@ class GooglePlaywrightBrowserContext:
             await recovery_email_button.click()
             await page.locator('xpath=//input[@id="knowledge-preregistered-email-response"]').fill(self.account.recovery_email)
             await page.get_by_text("Next").click()
-            await page.get_by_text("Not now").click()
             self._needs_recovery_email = False
+            # На новых аккаунтах может выскакивать назойливое напоминание
+            try:
+                await page.get_by_text("Not now").click(timeout=self.delay)
+            except TimeoutError:
+                pass
 
         await page.wait_for_url(self.MY_ACCOUNT_URL_PATTERN)
         self._logged_in = True
@@ -114,7 +120,6 @@ class GooglePlaywrightBrowserContext:
         redirect_url = None
 
         async def request_handler(request: Request):
-            print()
             nonlocal oauth_code
             nonlocal redirect_url
 
@@ -128,12 +133,13 @@ class GooglePlaywrightBrowserContext:
 
         await page.goto(oauth_url)
         # TODO Поведение страницы может отличаться, если значение prompt != "consent"
+        await page.wait_for_timeout(self.delay)
         await page.locator(f'[data-identifier="{self.account.email}"]').click()
         await page.wait_for_load_state("networkidle")
         try:
-            await page.get_by_text("Continue", exact=True).click(no_wait_after=True, timeout=5_000)
+            await page.get_by_text("Continue", exact=True).click(timeout=self.delay)
         except TimeoutError:
             pass
-        await page.wait_for_load_state("networkidle")
+        await page.wait_for_timeout(self.delay)
         await page.close()
         return oauth_code, str(redirect_url)
