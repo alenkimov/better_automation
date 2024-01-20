@@ -20,7 +20,7 @@ class GooglePlaywrightBrowserContext:
             account: GoogleAccount,
             *,
             stealth: bool = False,
-            delay: int = 2_000,
+            delay: int = 5_000,
     ):
         self._context = context
         self.account = account
@@ -134,10 +134,10 @@ class GooglePlaywrightBrowserContext:
         await page.goto(oauth_url)
         # TODO Поведение страницы может отличаться, если значение prompt != "consent"
         await page.wait_for_timeout(self.delay)
-        await page.locator(f'[data-identifier="{self.account.email}"]').click()
+        await page.locator(f'[data-identifier="{self.account.email.lower()}"]').click()
         await page.wait_for_load_state("networkidle")
         try:
-            await page.get_by_text("Continue", exact=True).click(timeout=self.delay)
+            await page.locator('div[jsname="uRHG6"] button[jsname="LgbsSe"]').click(timeout=self.delay)
         except TimeoutError:
             pass
         await page.wait_for_timeout(self.delay)
