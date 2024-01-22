@@ -1,7 +1,5 @@
 """
 Скрипт для установки статуса Twitter аккаунтов (проверка на бан).
-
-pip install better-automation better-proxy
 """
 
 import sys
@@ -85,7 +83,7 @@ async def establish_account_status(account: TwitterAccount, proxy: Proxy = None)
         except requests.errors.RequestsError:
             pass
 
-    tqdm.write(f"{proxy} {account} {account.status}")
+    tqdm.write(f"{proxy.fixed_length} {account} {account.status}")
 
 
 async def check_accounts(
@@ -117,7 +115,7 @@ if __name__ == '__main__':
     proxies = Proxy.from_file(PROXIES_TXT)
     print(f"Прокси: {len(proxies)}")
     if not proxies:
-        print(f"(Необязательно) Внесите прокси в любом формате "
+        print(f"(Необязательно) Внесите прокси в любом формате"
               f"\n\tв файл по пути {PROXIES_TXT}")
 
     accounts = load_accounts_with_additional_data()
