@@ -1,5 +1,6 @@
 from curl_cffi import requests
 
+from .account import TwitterAccount
 
 __all__ = [
     "TwitterException",
@@ -10,11 +11,44 @@ __all__ = [
     "NotFound",
     "RateLimited",
     "TwitterServerError",
+    "BadTwitterAccount",
+    "BadToken",
+    "Locked",
+    "Suspended",
 ]
 
 
 class TwitterException(Exception):
     pass
+
+
+class BadTwitterAccount(TwitterException):
+    def __init__(
+            self,
+            account: TwitterAccount,
+            custom_exception_message: str = None,
+    ):
+        self.account = account
+        exception_message = f"Bad Twitter account."
+        super().__init__(custom_exception_message or exception_message)
+
+
+class BadToken(BadTwitterAccount):
+    def __init__(self, account: TwitterAccount):
+        exception_message = f"Bad Twitter account's auth_token."
+        super().__init__(account, custom_exception_message=exception_message)
+
+
+class Locked(BadTwitterAccount):
+    def __init__(self, account: TwitterAccount):
+        exception_message = f"Twitter account is locked. Captcha required to unlock."
+        super().__init__(account, custom_exception_message=exception_message)
+
+
+class Suspended(BadTwitterAccount):
+    def __init__(self, account: TwitterAccount):
+        exception_message = f"Twitter account is suspended."
+        super().__init__(account, custom_exception_message=exception_message)
 
 
 class HTTPException(TwitterException):

@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import warnings
 from typing import Any, Literal
 from time import time
 
@@ -15,6 +14,10 @@ from better_automation.twitter.errors import (
     NotFound,
     RateLimited,
     TwitterServerError,
+    BadTwitterAccount,
+    BadToken,
+    Locked,
+    Suspended,
 )
 from ..utils import to_json
 from ..base import BaseClient
@@ -114,6 +117,7 @@ class TwitterClient(BaseClient):
 
             if 32 in exc.api_codes:
                 self.account.status = TwitterAccountStatus.BAD_TOKEN
+                raise BadToken(self.account)
 
             raise exc
 
@@ -126,9 +130,11 @@ class TwitterClient(BaseClient):
 
             if 64 in exc.api_codes:
                 self.account.status = TwitterAccountStatus.SUSPENDED
+                raise Suspended(self.account)
 
             if 326 in exc.api_codes:
                 self.account.status = TwitterAccountStatus.LOCKED
+                raise Locked(self.account)
 
             raise exc
 
@@ -146,9 +152,11 @@ class TwitterClient(BaseClient):
 
             if 141 in exc.api_codes:
                 self.account.status = TwitterAccountStatus.SUSPENDED
+                raise Suspended(self.account)
 
             if 326 in exc.api_codes:
                 self.account.status = TwitterAccountStatus.LOCKED
+                raise Locked(self.account)
 
             raise exc
 
@@ -697,7 +705,7 @@ class TwitterClient(BaseClient):
         url = "https://twitter.com/i/api/1.1/account/update_profile.json"
         try:
             await self.request("POST", url)
-        except HTTPException:
+        except BadTwitterAccount:
             pass
 
     async def update_birthdate(

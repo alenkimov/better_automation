@@ -10,6 +10,7 @@ class GoogleAccount(BaseModel):
     email:          str
     password:       str
     recovery_email: str | None = None
+    # TODO Сохранять cookie, чтобы не перезаходить в аккаунт каждый раз
 
     def __init__(
             self,
@@ -65,7 +66,7 @@ class GoogleAccount(BaseModel):
             filepath: Path | str,
             accounts: Iterable["GoogleAccount"],
             *,
-            separator: str = ":",
+            separator: str = ";",
             fields: Sequence[str] = ("email", "password", "recovery_email"),
     ):
         lines = []
