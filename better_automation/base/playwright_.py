@@ -16,7 +16,7 @@ class BasePlaywrightBrowser:
             self,
             *,
             default_timeout: int = 10_000,
-            proxy: str | Proxy = None,
+            proxy: str | Proxy = None,  # TODO Принимать в Playwright формате тоже
             **launch_kwargs
     ):
         self._playwright: Playwright | None = None
@@ -45,7 +45,7 @@ class BasePlaywrightBrowser:
     async def new_context(
             self,
             *,
-            proxy: str | Proxy = None,
+            proxy: str | Proxy = None,  # TODO Принимать в Playwright формате тоже
             **context_kwargs,
     ):
         proxy = Proxy.from_str(proxy).as_playwright_proxy if proxy else None

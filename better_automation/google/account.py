@@ -10,7 +10,7 @@ class GoogleAccount(BaseModel):
     email:          str
     password:       str
     recovery_email: str | None = None
-    # TODO Сохранять cookie, чтобы не перезаходить в аккаунт каждый раз
+    cookies:        list | None = None
 
     def __init__(
             self,
@@ -18,11 +18,13 @@ class GoogleAccount(BaseModel):
             password: str,
             *,
             recovery_email: str = None,
+            cookies: list = None
     ):
         super().__init__(
             email=email,
             password=password,
             recovery_email=recovery_email,
+            cookies=cookies,
         )
 
     @property

@@ -1,18 +1,87 @@
 import re
-from typing import Literal
+from typing import Literal, Iterable
 
 from yarl import URL
-from playwright.async_api import BrowserContext, Request, TimeoutError
+from playwright.async_api import BrowserContext, Request, TimeoutError, Page, Response, Cookie
 from playwright_stealth import stealth_async
-from .errors import CaptchaRequired
+from .errors import CaptchaRequired, FailedToOAuth2, FailedToLogin, RecoveryRequired
 from .account import GoogleAccount
+from .utils import check_cookies
 
 
 PromptType = Literal["consent", "select_account"] | None
 
 
+def is_valid_google_cookies(cookies: list[dict]) -> bool:
+    """
+    SID и HSID: Эти cookie содержат цифровые подписи и информацию о последнем входе в систему.
+    SSID, APISID, SAPISID: Также содержат информацию об аутентификации и используются в различных сервисах Google для поддержания сессии пользователя.
+    __Secure*: Хотя они в первую очередь используются для рекламных целей, они также связаны с твоей учетной записью и могут содержать важную информацию о сессии.
+    NID: Используется для хранения настроек пользователя и может содержать информацию, упрощающую доступ к аккаунту.
+    GAPS: Этот cookie используется для аутентификации в различных приложениях Google и может содержать важные данные аутентификации.
+
+    Все cookie, содержащие информацию об аутентификации:
+        SID
+        HSID
+        SSID
+        APISID
+        SAPISID
+        OTZ
+        NID
+        OSID
+        LSID
+        SIDCC
+        ACCOUNT_CHOOSER
+        __Secure-1PSIDTS
+        __Secure-3PSIDTS
+        __Secure-1PSID
+        __Secure-3PSID
+        __Secure-1PAPISID
+        __Secure-3PAPISID
+        __Secure-1PSIDCC
+        __Secure-3PSIDCC
+        __Secure-OSID
+        __Host-1PLSID
+        __Host-3PLSID
+        __Host-GAPS
+    """
+    return check_cookies(cookies, {"SID", "HSID"})
+
+
+# async def wait_for_one_of_urls(page: Page, url_patterns: Iterable[re.Pattern]):
+#     async def check_url(response: Response):
+#         url = response.url
+#         return any(url_pattern.search(url) for url_pattern in url_patterns)
+#
+#     while True:
+#         response = await page.wait_for_event("request")
+#         if await check_url(response):
+#             break
+
+
 class GooglePlaywrightBrowserContext:
-    MY_ACCOUNT_URL_PATTERN = re.compile(r"https://myaccount\.google\.com.*")
+    # Logining
+    _EMAIL_FIELD_XPATH = '//*[@id="identifierId"]'
+    _EMAIL_CONFIRMATION_BUTTON_XPATH = '//*[@id="identifierNext"]/div/button'
+    _RECAPTCHA_XPATH = '//iframe[@title="reCAPTCHA"]'
+    _PASSWORD_FIELD_XPATH = '//*[@id="password"]/div[1]/div/div[1]/input'
+    _PASSWORD_CONFIRMATION_BUTTON_XPATH = '//*[@id="passwordNext"]/div/button'
+    _RECOVERY_EMAIL_BUTTON_XPATH = '//div[@data-challengeid="5"]'
+    _RECOVERY_EMAIL_FIELD_XPATH = '//input[@id="knowledge-preregistered-email-response"]'
+    _RECOVERY_EMAIL_CONFIRMATION_BUTTON_XPATH = '//div[@jsname="Njthtb"]/div/button'
+    # _NEXT_BUTTON_XPATH = '//button[@jsname="bySMBb"]'
+    _PASSKEY_NOT_NOW_BUTTON_XPATH = '//*[@jsname="QkNstf"]/div/div/button'
+    _RECOVERY_BUTTON_XPATH = '//div[@id="accountRecoveryButton"]/div/div/a'
+
+    # _PASSKEY_URL = "https://accounts.google.com/signin/v2/passkeyenrollment"
+    _PASSKEY_URL_PATTERN = re.compile(r"https://accounts\.google\.com/signin/v2/passkeyenrollment.*")
+    _MY_ACCOUNT_URL_PATTERN = re.compile(r"https://myaccount\.google\.com.*")
+    _GDS_URL_PATTERN = re.compile(r"https://gds\.google\.com.*")
+    _LOGGED_IN_URL_PATTERNS = (_MY_ACCOUNT_URL_PATTERN, _GDS_URL_PATTERN)
+
+    # OAuth2
+    _CONTINUE_BUTTON_LOCATOR = '//div[@jsname="uRHG6"]/div/button'
+    _ACCOUNT_BUTTON_LOCATOR = '[data-identifier="{email}"]'
 
     def __init__(
             self,
@@ -20,64 +89,97 @@ class GooglePlaywrightBrowserContext:
             account: GoogleAccount,
             *,
             stealth: bool = False,
-            delay: int = 5_000,
+            timeout_to_wait: int = 5_000,
     ):
         self._context = context
         self.account = account
         self.stealth = stealth
-        self.delay = delay
+        self.timeout_to_wait = timeout_to_wait
 
         self._logged_in: bool = False
         self._needs_recovery_email: bool = False
 
-    async def new_page(self):
+    def _account_button_locator(self) -> str:
+        return self._ACCOUNT_BUTTON_LOCATOR.format(email=self.account.email.lower())
+
+    async def _new_page(self):
         page = await self._context.new_page()
         if self.stealth: await stealth_async(page)
         return page
 
+    def logged_in(self) -> bool:
+        return self._logged_in
+
     async def login(self):
-        page = await self.new_page()
-        await page.goto("https://accounts.google.com/ServiceLogin")
-        await page.locator('xpath=//*[@id="identifierId"]').fill(self.account.email)
-        await page.locator('xpath=//*[@id="identifierNext"]/div/button/div[3]').click()
-        await page.wait_for_load_state("networkidle")
-        if await page.locator('xpath=//iframe[@title="reCAPTCHA"]').count() > 0:
-            raise CaptchaRequired("Обнаружена reCAPTCHA.")
-        await page.locator('xpath=//*[@id="password"]/div[1]/div/div[1]/input').fill(self.account.password)
-        await page.locator('xpath=//*[@id="passwordNext"]/div/button/span').click()
+        if self.account.cookies and is_valid_google_cookies(self.account.cookies):
+            await self._context.add_cookies(self.account.cookies)
+            self._logged_in = True
+            return
 
-        # На новых аккаунтах может выскакивать назойливое напоминание
+        page = await self._new_page()
         try:
-            await page.get_by_text("Not now").click(timeout=self.delay)
-        except TimeoutError:
-            pass
+            await page.goto("https://accounts.google.com/ServiceLogin")
+            await page.locator(self._EMAIL_FIELD_XPATH).type(self.account.email)
+            await page.locator(self._EMAIL_CONFIRMATION_BUTTON_XPATH).click()
+            await page.wait_for_load_state("networkidle")
+            if await page.locator(self._RECAPTCHA_XPATH).count() > 0:
+                raise CaptchaRequired("Обнаружена reCAPTCHA.")
+            await page.locator(self._PASSWORD_FIELD_XPATH).type(self.account.password)
+            await page.locator(self._PASSWORD_CONFIRMATION_BUTTON_XPATH).click()
 
-        # Если в аккаунт с этого IP не входили ранее, то попросит ввести recovery_email
-        recovery_email_button = page.locator('div[data-challengeid="5"]')
-        try:
-            await recovery_email_button.wait_for()
-            self._needs_recovery_email = True
-        except TimeoutError:
-            self._needs_recovery_email = False
-            pass
-
-        if self._needs_recovery_email:
-            if not self.account.recovery_email:
-                raise ValueError(f"Needs recovery email")
-
-            await recovery_email_button.click()
-            await page.locator('xpath=//input[@id="knowledge-preregistered-email-response"]').fill(self.account.recovery_email)
-            await page.get_by_text("Next").click()
-            self._needs_recovery_email = False
-            # На новых аккаунтах может выскакивать назойливое напоминание
+            # Если в аккаунт с этого IP не входили ранее, то просит ввести recovery_email
+            recovery_email_button = page.locator(self._RECOVERY_EMAIL_BUTTON_XPATH)
             try:
-                await page.get_by_text("Not now").click(timeout=self.delay)
+                await recovery_email_button.wait_for(timeout=self.timeout_to_wait)
+                self._needs_recovery_email = True
             except TimeoutError:
                 pass
 
-        await page.wait_for_url(self.MY_ACCOUNT_URL_PATTERN)
-        self._logged_in = True
-        await page.close()
+            if self._needs_recovery_email:
+                if not self.account.recovery_email:
+                    raise ValueError(f"Needs recovery email")
+
+                await recovery_email_button.click()
+                await page.locator(self._RECOVERY_EMAIL_FIELD_XPATH).type(self.account.recovery_email)
+                await page.locator(self._RECOVERY_EMAIL_CONFIRMATION_BUTTON_XPATH).click()
+                self._needs_recovery_email = False
+
+            await page.wait_for_load_state("load")
+
+            try:
+                await page.locator(self._RECOVERY_BUTTON_XPATH).wait_for(timeout=self.timeout_to_wait)
+                raise RecoveryRequired("Failed to login Google account."
+                                       " Google: We noticed unusual activity in your Google Account."
+                                       " To keep your account safe, you were signed out."
+                                       " To continue, you’ll need to verify it’s you.")
+            except TimeoutError:
+                pass
+
+            # Иногда просит установить passkey
+            try:
+                await page.locator(self._PASSKEY_NOT_NOW_BUTTON_XPATH).click(timeout=self.timeout_to_wait)
+            except TimeoutError:
+                pass
+
+            await page.wait_for_load_state("load")
+
+            for _ in range(5):
+                await page.wait_for_timeout(self.timeout_to_wait / 5)
+                if any(url_pattern.search(page.url) for url_pattern in self._LOGGED_IN_URL_PATTERNS):
+                    cookies = await self._context.cookies()
+                    self._logged_in = is_valid_google_cookies(cookies)
+                    break
+
+            await page.close()
+
+            if not self._logged_in:
+                raise FailedToLogin("Failed to login Google account: failed to catch auth cookies")
+
+            self.account.cookies = cookies
+
+        except TimeoutError:
+            await page.close()
+            raise FailedToLogin("Failed to login Google account: unexpected TimeoutError")
 
     async def oauth2(
             self,
@@ -93,7 +195,7 @@ class GooglePlaywrightBrowserContext:
             enable_granular_consent: bool | str = True,
     ) -> tuple[str | None, str | None]:
         """
-        Найдите подобную ссылку: https://accounts.google.com/o/oauth2/v2/auth?client_id=...
+        Найдите подобную ссылку: `https://accounts.google.com/o/oauth2/v2/auth?client_id=...`
         Передайте параметры ссылки (после знака вопроса (?)) в метод oauth2
         Метод вернет oauth_code и redirect_url (также содержится в redirect_url)
         :return: oauth_code, redirect_url
@@ -114,7 +216,7 @@ class GooglePlaywrightBrowserContext:
         }
         if prompt: params["prompt"] = prompt
         oauth_url = str(URL(oauth_url).with_query(params))
-        page = await self.new_page()
+        page = await self._new_page()
 
         oauth_code = None
         redirect_url = None
@@ -131,15 +233,20 @@ class GooglePlaywrightBrowserContext:
 
         page.on("request", request_handler)
 
-        await page.goto(oauth_url)
-        # TODO Поведение страницы может отличаться, если значение prompt != "consent"
-        await page.wait_for_timeout(self.delay)
-        await page.locator(f'[data-identifier="{self.account.email.lower()}"]').click()
-        await page.wait_for_load_state("networkidle")
         try:
-            await page.locator('div[jsname="uRHG6"] button[jsname="LgbsSe"]').click(timeout=self.delay)
+            await page.goto(oauth_url)
+            # TODO Поведение страницы может отличаться, если значение prompt != "consent"
+            await page.wait_for_timeout(self.timeout_to_wait)
+            await page.locator(self._account_button_locator()).click()
+            await page.wait_for_load_state("networkidle")
+            try:
+                await page.locator(self._CONTINUE_BUTTON_LOCATOR).click(timeout=self.timeout_to_wait)
+            except TimeoutError:
+                pass
+            await page.wait_for_timeout(self.timeout_to_wait)
         except TimeoutError:
-            pass
-        await page.wait_for_timeout(self.delay)
+            await page.close()
+            raise FailedToOAuth2("Failed to OAuth2 Google account: unexpected TimeoutError")
+
         await page.close()
         return oauth_code, str(redirect_url)
