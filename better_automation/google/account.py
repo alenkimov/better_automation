@@ -1,3 +1,4 @@
+from enum import StrEnum
 from pathlib import Path
 from typing import Sequence, Iterable
 
@@ -6,11 +7,24 @@ from pydantic import BaseModel
 from ..utils import load_lines, write_lines
 
 
+class GoogleAccountStatus(StrEnum):
+    UNKNOWN = "UNKNOWN"
+    BAD_COOKIES = "BAD_COOKIES"
+    RECOVERY_EMAIL_REQUIRED = "RECOVERY_EMAIL_REQUIRED"
+    RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
+    CAPTCHA_REQUIRED = "CAPTCHA_REQUIRED"
+    GOOD = "GOOD"
+
+    def __str__(self):
+        return self.value
+
+
 class GoogleAccount(BaseModel):
     email:          str
     password:       str
     recovery_email: str | None = None
     cookies:        list | None = None
+    status: GoogleAccountStatus = GoogleAccountStatus.UNKNOWN
 
     def __init__(
             self,

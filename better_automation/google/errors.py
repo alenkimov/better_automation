@@ -23,6 +23,13 @@ class RecoveryRequired(FailedToLogin):
     pass
 
 
+class RecoveryEmailRequired(FailedToLogin):
+    """
+    Исключение, вызываемое если не получилось залогиниться из-за того, что требуется recovery_email.
+    """
+    pass
+
+
 class FailedToOAuth2(GoogleError):
     """Исключение, вызываемое если не получилось авторизоваться через OAuth2 по неизвестной причине."""
     pass

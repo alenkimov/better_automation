@@ -1,18 +1,18 @@
 import re
-from typing import Literal, Iterable
+from typing import Literal
 
 from yarl import URL
-from playwright.async_api import BrowserContext, Request, TimeoutError, Page, Response, Cookie
+from playwright.async_api import BrowserContext, Request, TimeoutError
 from playwright_stealth import stealth_async
 from .errors import CaptchaRequired, FailedToOAuth2, FailedToLogin, RecoveryRequired
-from .account import GoogleAccount
+from .account import GoogleAccount, GoogleAccountStatus
 from .utils import check_cookies
 
 
 PromptType = Literal["consent", "select_account"] | None
 
 
-def is_valid_google_cookies(cookies: list[dict]) -> bool:
+def are_valid_google_cookies(cookies: list[dict]) -> bool:
     """
     SID и HSID: Эти cookie содержат цифровые подписи и информацию о последнем входе в систему.
     SSID, APISID, SAPISID: Также содержат информацию об аутентификации и используются в различных сервисах Google для поддержания сессии пользователя.
@@ -46,17 +46,6 @@ def is_valid_google_cookies(cookies: list[dict]) -> bool:
         __Host-GAPS
     """
     return check_cookies(cookies, {"SID", "HSID"})
-
-
-# async def wait_for_one_of_urls(page: Page, url_patterns: Iterable[re.Pattern]):
-#     async def check_url(response: Response):
-#         url = response.url
-#         return any(url_pattern.search(url) for url_pattern in url_patterns)
-#
-#     while True:
-#         response = await page.wait_for_event("request")
-#         if await check_url(response):
-#             break
 
 
 class GooglePlaywrightBrowserContext:
@@ -111,8 +100,13 @@ class GooglePlaywrightBrowserContext:
         return self._logged_in
 
     async def login(self):
-        if self.account.cookies and is_valid_google_cookies(self.account.cookies):
+        if self.account.cookies:
+            if not are_valid_google_cookies(self.account.cookies):
+                self.account.status = GoogleAccountStatus.BAD_COOKIES
+                return
+
             await self._context.add_cookies(self.account.cookies)
+            self.account.status = GoogleAccountStatus.GOOD
             self._logged_in = True
             return
 
@@ -123,6 +117,7 @@ class GooglePlaywrightBrowserContext:
             await page.locator(self._EMAIL_CONFIRMATION_BUTTON_XPATH).click()
             await page.wait_for_load_state("networkidle")
             if await page.locator(self._RECAPTCHA_XPATH).count() > 0:
+                self.account.status = GoogleAccountStatus.CAPTCHA_REQUIRED
                 raise CaptchaRequired("Обнаружена reCAPTCHA.")
             await page.locator(self._PASSWORD_FIELD_XPATH).type(self.account.password)
             await page.locator(self._PASSWORD_CONFIRMATION_BUTTON_XPATH).click()
@@ -137,7 +132,8 @@ class GooglePlaywrightBrowserContext:
 
             if self._needs_recovery_email:
                 if not self.account.recovery_email:
-                    raise ValueError(f"Needs recovery email")
+                    self.account.status = GoogleAccountStatus.RECOVERY_EMAIL_REQUIRED
+                    raise FailedToLogin(f"Failed to login Google account: recovery email required")
 
                 await recovery_email_button.click()
                 await page.locator(self._RECOVERY_EMAIL_FIELD_XPATH).type(self.account.recovery_email)
@@ -148,6 +144,7 @@ class GooglePlaywrightBrowserContext:
 
             try:
                 await page.locator(self._RECOVERY_BUTTON_XPATH).wait_for(timeout=self.timeout_to_wait)
+                self.account.status = GoogleAccountStatus.RECOVERY_REQUIRED
                 raise RecoveryRequired("Failed to login Google account."
                                        " Google: We noticed unusual activity in your Google Account."
                                        " To keep your account safe, you were signed out."
@@ -163,19 +160,22 @@ class GooglePlaywrightBrowserContext:
 
             await page.wait_for_load_state("load")
 
+            cookies = None
             for _ in range(5):
                 await page.wait_for_timeout(self.timeout_to_wait / 5)
                 if any(url_pattern.search(page.url) for url_pattern in self._LOGGED_IN_URL_PATTERNS):
                     cookies = await self._context.cookies()
-                    self._logged_in = is_valid_google_cookies(cookies)
+                    self._logged_in = are_valid_google_cookies(cookies)
                     break
 
             await page.close()
 
-            if not self._logged_in:
+            if self._logged_in:
+                self.account.status = GoogleAccountStatus.GOOD
+                self.account.cookies = cookies
+            else:
+                self.account.status = GoogleAccountStatus.UNKNOWN
                 raise FailedToLogin("Failed to login Google account: failed to catch auth cookies")
-
-            self.account.cookies = cookies
 
         except TimeoutError:
             await page.close()
