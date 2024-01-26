@@ -4,7 +4,7 @@ from typing import Literal
 from yarl import URL
 from playwright.async_api import BrowserContext, Request, TimeoutError
 from playwright_stealth import stealth_async
-from .errors import CaptchaRequired, FailedToOAuth2, FailedToLogin, RecoveryRequired
+from .errors import CaptchaRequired, FailedToOAuth2, FailedToLogin, RecoveryRequired, RecoveryEmailRequired
 from .account import GoogleAccount, GoogleAccountStatus
 from .utils import check_cookies
 
@@ -50,27 +50,31 @@ def are_valid_google_cookies(cookies: list[dict]) -> bool:
 
 class GooglePlaywrightBrowserContext:
     # Logining
+    # # XPATH::COMMON
+    _LEFT_BUTTON_XPATH = '//div[@jsname="QkNstf"]/div/div/button'  # Not now, Try another way
+    _RIGHT_BUTTON_XPATH = '//div[@jsname="Njthtb"]/div/button'  # Continue, Send, Next
+
+    # # XPATH
     _EMAIL_FIELD_XPATH = '//*[@id="identifierId"]'
     _EMAIL_CONFIRMATION_BUTTON_XPATH = '//*[@id="identifierNext"]/div/button'
-    _RECAPTCHA_XPATH = '//iframe[@title="reCAPTCHA"]'
+    _RECAPTCHA_IFRAME_XPATH = '//iframe[@title="reCAPTCHA"]'
     _PASSWORD_FIELD_XPATH = '//*[@id="password"]/div[1]/div/div[1]/input'
     _PASSWORD_CONFIRMATION_BUTTON_XPATH = '//*[@id="passwordNext"]/div/button'
     _RECOVERY_EMAIL_BUTTON_XPATH = '//div[@data-challengeid="5"]'
     _RECOVERY_EMAIL_FIELD_XPATH = '//input[@id="knowledge-preregistered-email-response"]'
-    _RECOVERY_EMAIL_CONFIRMATION_BUTTON_XPATH = '//div[@jsname="Njthtb"]/div/button'
-    # _NEXT_BUTTON_XPATH = '//button[@jsname="bySMBb"]'
-    _PASSKEY_NOT_NOW_BUTTON_XPATH = '//*[@jsname="QkNstf"]/div/div/button'
     _RECOVERY_BUTTON_XPATH = '//div[@id="accountRecoveryButton"]/div/div/a'
 
-    # _PASSKEY_URL = "https://accounts.google.com/signin/v2/passkeyenrollment"
+    # # PATTERNS
+    _RECOVERY_REQUIRED_URL_PATTERN = re.compile(r"https://accounts\.google\.com/v3/signin/rejected.*")
     _PASSKEY_URL_PATTERN = re.compile(r"https://accounts\.google\.com/signin/v2/passkeyenrollment.*")
     _MY_ACCOUNT_URL_PATTERN = re.compile(r"https://myaccount\.google\.com.*")
     _GDS_URL_PATTERN = re.compile(r"https://gds\.google\.com.*")
     _LOGGED_IN_URL_PATTERNS = (_MY_ACCOUNT_URL_PATTERN, _GDS_URL_PATTERN)
 
     # OAuth2
-    _CONTINUE_BUTTON_LOCATOR = '//div[@jsname="uRHG6"]/div/button'
-    _ACCOUNT_BUTTON_LOCATOR = '[data-identifier="{email}"]'
+    # # XPATH
+    _CONTINUE_BUTTON_XPATH = '//div[@jsname="uRHG6"]/div/button'
+    _ACCOUNT_BUTTON_XPATH = '//*[@data-identifier="{email}"]'
 
     def __init__(
             self,
@@ -78,7 +82,7 @@ class GooglePlaywrightBrowserContext:
             account: GoogleAccount,
             *,
             stealth: bool = False,
-            timeout_to_wait: int = 5_000,
+            timeout_to_wait: int = 10_000,
     ):
         self._context = context
         self.account = account
@@ -88,8 +92,8 @@ class GooglePlaywrightBrowserContext:
         self._logged_in: bool = False
         self._needs_recovery_email: bool = False
 
-    def _account_button_locator(self) -> str:
-        return self._ACCOUNT_BUTTON_LOCATOR.format(email=self.account.email.lower())
+    def _account_button_xpath(self) -> str:
+        return self._ACCOUNT_BUTTON_XPATH.format(email=self.account.email.lower())
 
     async def _new_page(self):
         page = await self._context.new_page()
@@ -116,7 +120,7 @@ class GooglePlaywrightBrowserContext:
             await page.locator(self._EMAIL_FIELD_XPATH).type(self.account.email)
             await page.locator(self._EMAIL_CONFIRMATION_BUTTON_XPATH).click()
             await page.wait_for_load_state("networkidle")
-            if await page.locator(self._RECAPTCHA_XPATH).count() > 0:
+            if await page.locator(self._RECAPTCHA_IFRAME_XPATH).count() > 0:
                 self.account.status = GoogleAccountStatus.CAPTCHA_REQUIRED
                 raise CaptchaRequired("Обнаружена reCAPTCHA.")
             await page.locator(self._PASSWORD_FIELD_XPATH).type(self.account.password)
@@ -133,11 +137,12 @@ class GooglePlaywrightBrowserContext:
             if self._needs_recovery_email:
                 if not self.account.recovery_email:
                     self.account.status = GoogleAccountStatus.RECOVERY_EMAIL_REQUIRED
-                    raise FailedToLogin(f"Failed to login Google account: recovery email required")
+                    raise RecoveryEmailRequired(f"Failed to login Google account: recovery email required.")
 
                 await recovery_email_button.click()
+                await page.wait_for_load_state("load")
                 await page.locator(self._RECOVERY_EMAIL_FIELD_XPATH).type(self.account.recovery_email)
-                await page.locator(self._RECOVERY_EMAIL_CONFIRMATION_BUTTON_XPATH).click()
+                await page.locator(self._RIGHT_BUTTON_XPATH).click()
                 self._needs_recovery_email = False
 
             await page.wait_for_load_state("load")
@@ -153,10 +158,11 @@ class GooglePlaywrightBrowserContext:
                 pass
 
             # Иногда просит установить passkey
-            try:
-                await page.locator(self._PASSKEY_NOT_NOW_BUTTON_XPATH).click(timeout=self.timeout_to_wait)
-            except TimeoutError:
-                pass
+            # try:
+            #     # TODO Проверять passkey другим способов
+            #     await page.locator(self._LEFT_BUTTON_XPATH).click(timeout=self.timeout_to_wait)
+            # except TimeoutError:
+            #     pass
 
             await page.wait_for_load_state("load")
 
@@ -175,11 +181,11 @@ class GooglePlaywrightBrowserContext:
                 self.account.cookies = cookies
             else:
                 self.account.status = GoogleAccountStatus.UNKNOWN
-                raise FailedToLogin("Failed to login Google account: failed to catch auth cookies")
+                raise FailedToLogin("Failed to login Google account: failed to catch auth cookies.")
 
         except TimeoutError:
             await page.close()
-            raise FailedToLogin("Failed to login Google account: unexpected TimeoutError")
+            raise FailedToLogin("Failed to login Google account: unexpected TimeoutError.")
 
     async def oauth2(
             self,
@@ -237,16 +243,20 @@ class GooglePlaywrightBrowserContext:
             await page.goto(oauth_url)
             # TODO Поведение страницы может отличаться, если значение prompt != "consent"
             await page.wait_for_timeout(self.timeout_to_wait)
-            await page.locator(self._account_button_locator()).click()
+            await page.locator(self._account_button_xpath()).click()
             await page.wait_for_load_state("networkidle")
             try:
-                await page.locator(self._CONTINUE_BUTTON_LOCATOR).click(timeout=self.timeout_to_wait)
+                await page.locator(self._CONTINUE_BUTTON_XPATH).click(timeout=self.timeout_to_wait)
             except TimeoutError:
                 pass
             await page.wait_for_timeout(self.timeout_to_wait)
         except TimeoutError:
             await page.close()
-            raise FailedToOAuth2("Failed to OAuth2 Google account: unexpected TimeoutError")
+            raise FailedToOAuth2("Failed to OAuth2 Google account: unexpected TimeoutError.")
 
         await page.close()
+
+        if not oauth_code:
+            raise FailedToOAuth2("Failed to OAuth2 Google account: Failed to catch oauth code.")
+
         return oauth_code, str(redirect_url)

@@ -23,6 +23,7 @@ class GoogleAccount(BaseModel):
     email:          str
     password:       str
     recovery_email: str | None = None
+    # TODO Валидировать cookies
     cookies:        list | None = None
     status: GoogleAccountStatus = GoogleAccountStatus.UNKNOWN
 
