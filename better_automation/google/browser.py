@@ -83,6 +83,7 @@ class GooglePlaywrightBrowserContext:
             *,
             stealth: bool = False,
             timeout_to_wait: int = 10_000,
+            time_to_solve_captcha: int = 0,
     ):
         self._context = context
         self.account = account
@@ -122,6 +123,8 @@ class GooglePlaywrightBrowserContext:
             await page.wait_for_load_state("networkidle")
             if await page.locator(self._RECAPTCHA_IFRAME_XPATH).count() > 0:
                 self.account.status = GoogleAccountStatus.CAPTCHA_REQUIRED
+                # TODO Здесь надо ждать время на решение капчи.
+                #  Если время кончилось, то вызывать исключение
                 raise CaptchaRequired("Обнаружена reCAPTCHA.")
             await page.locator(self._PASSWORD_FIELD_XPATH).type(self.account.password)
             await page.locator(self._PASSWORD_CONFIRMATION_BUTTON_XPATH).click()
@@ -157,12 +160,12 @@ class GooglePlaywrightBrowserContext:
             except TimeoutError:
                 pass
 
+            await page.wait_for_load_state("load")
+
             # Иногда просит установить passkey
-            # try:
-            #     # TODO Проверять passkey другим способов
-            #     await page.locator(self._LEFT_BUTTON_XPATH).click(timeout=self.timeout_to_wait)
-            # except TimeoutError:
-            #     pass
+            if self._PASSKEY_URL_PATTERN.search(page.url):
+                # Not now button
+                await page.locator(self._LEFT_BUTTON_XPATH).click(timeout=self.timeout_to_wait)
 
             await page.wait_for_load_state("load")
 
