@@ -20,20 +20,24 @@ OAUTH2_DATA = {
 
 async def main():
     # Загрузит Google аккаунты из файла или импортируйте их другим удобным способом
-    google_accounts = GoogleAccount.from_file("google_accounts.txt", separator=";")
+    google_accounts = GoogleAccount.from_file("google_accounts.txt", separator=":")
     proxies = Proxy.from_file("proxies.txt")
 
     # Создайте базовый браузер
     async with BasePlaywrightBrowser(headless=False) as browser:
+        # for google_account in google_accounts:
         for proxy, google_account in zip(proxies, google_accounts):
             # Создайте новый контекст
+            # async with browser.new_context() as context:
             async with browser.new_context(proxy=proxy) as context:
                 # Создайте экземпляр GooglePlaywrightBrowserContext для взаимодействия с Google через эмуляцию
                 #   на основе этого контекста и аккаунта Google
-                google = GooglePlaywrightBrowserContext(context, google_account)
+                google = GooglePlaywrightBrowserContext(
+                    context, google_account, smshub_api_key='178005Uf888bc007efe825c490eabc8d4be75a3')
                 # Передайте найденные параметры для OAuth2 авторизации в метод oauth2
-                oauth_code, redirect_url = await google.oauth2(**OAUTH2_DATA)
-                print(f"[{google_account}] {oauth_code}")
+                await google.login()
+                # oauth_code, redirect_url = await google.oauth2(**OAUTH2_DATA)
+                # print(f"[{google_account}] {oauth_code}")
                 # Полученный oauth_code передайте сервису для завершения привязки
 
 asyncio.run(main())

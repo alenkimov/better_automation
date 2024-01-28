@@ -7,12 +7,22 @@ from pydantic import BaseModel
 from ..utils import load_lines, write_lines
 
 
+def format_cookies(cookies):
+    """
+    # Фикс непонятно чего..
+    """
+    for cookie in cookies:
+        if cookie.get('sameSite') == 'no_restriction':
+            cookie['sameSite'] = 'None'
+
+
 class GoogleAccountStatus(StrEnum):
     UNKNOWN = "UNKNOWN"
     BAD_COOKIES = "BAD_COOKIES"
     RECOVERY_EMAIL_REQUIRED = "RECOVERY_EMAIL_REQUIRED"
     RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
     CAPTCHA_REQUIRED = "CAPTCHA_REQUIRED"
+    PHONE_VERIFICATION_REQUIRED = "PHONE_VERIFICATION_REQUIRED"
     GOOD = "GOOD"
 
     def __str__(self):

@@ -33,3 +33,10 @@ class RecoveryEmailRequired(FailedToLogin):
 class FailedToOAuth2(GoogleError):
     """Исключение, вызываемое если не получилось авторизоваться через OAuth2 по неизвестной причине."""
     pass
+
+
+class PhoneVerificationRequired(FailedToLogin):
+    """
+    Исключение, вызываемое если не получилось залогиниться из-за того, что требуется SMS верификация.
+    """
+    pass
