@@ -244,15 +244,19 @@ class GooglePlaywrightBrowserContext:
 
     async def _check_captcha_and_type_password(self, page: Page, login: bool = True):
         recaptcha_iframe = page.locator(self._RECAPTCHA_IFRAME_XPATH)
-
         await page.wait_for_load_state("networkidle")
-        # await recaptcha_iframe.wait_for(timeout=self.time_to_wait)
-        if await recaptcha_iframe.count():
+        try:
+            await recaptcha_iframe.wait_for(timeout=self.time_to_wait)
             self.account.status = GoogleAccountStatus.CAPTCHA_REQUIRED
+        except PlaywrightTimeoutError:
+            pass
+
+        if self.account.status == GoogleAccountStatus.CAPTCHA_REQUIRED:
             if self.wait_for_captcha_solving:
                 try:
                     recaptcha_frame_name = await recaptcha_iframe.get_attribute("name")
                     recaptcha = page.frame(name=recaptcha_frame_name)
+                    print("жду решения рекапчи")
                     await recaptcha.locator(self._RECAPTCHA_CHECKBOX_CHECKED_XPATH).wait_for(
                         timeout=self.time_to_solve_captcha)
                     await page.locator(self._RIGHT_BUTTON_XPATH).click()
