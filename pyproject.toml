@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "better-automation"
-version = "2.1.0.b21"
+version = "2.1.0.b22"
 description = "Unofficial Twitter, Discord, googleapis API"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"

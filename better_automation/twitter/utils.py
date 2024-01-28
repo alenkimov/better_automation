@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from bs4 import BeautifulSoup
 
 
@@ -25,3 +27,7 @@ def tweet_url(username: str, tweet_id: int) -> str:
     :return: Tweet URL
     """
     return f"https://x.com/{username}/status/{tweet_id}"
+
+
+def to_datetime(twitter_datetime: str):
+    return datetime.strptime(twitter_datetime, '%a %b %d %H:%M:%S +0000 %Y')

@@ -1,5 +1,8 @@
-from pydantic import BaseModel
 from datetime import datetime
+
+from pydantic import BaseModel
+
+from .utils import to_datetime
 
 
 class TwitterUserData(BaseModel):
@@ -19,15 +22,45 @@ class TwitterUserData(BaseModel):
     @classmethod
     def from_raw_user_data(cls, data: dict):
         legacy = data["legacy"]
-        values = {
+        keys = ("name", "description", "location")
+        values = {key: legacy[key] for key in keys}
+        values.update({
             "id": int(data["rest_id"]),
             "username": legacy["screen_name"],
-            "name": legacy["name"],
-            "created_at": datetime.strptime(legacy["created_at"], '%a %b %d %H:%M:%S +0000 %Y'),
-            "description": legacy["description"],
-            "location": legacy["location"],
+            "created_at": to_datetime(legacy["created_at"]),
             "followers_count": legacy["followers_count"],
             "followings_count": legacy["friends_count"],
             "raw_data": data,
-        }
+        })
+        return cls(**values)
+
+
+class Tweet(BaseModel):
+    user_id: int
+    id: int
+    created_at: datetime
+    full_text: str
+    lang: str
+    favorite_count: int
+    quote_count: int
+    reply_count: int
+    retweet_count: int
+    retweeted: bool
+    raw_data: dict
+
+    def __str__(self):
+        short_text = f"{self.full_text[:32]}..." if len(self.full_text) > 16 else self.full_text
+        return f"({self.id}) {short_text}"
+
+    @classmethod
+    def from_raw_data(cls, data: dict):
+        legacy = data['legacy']
+        keys = ("full_text", "lang", "favorite_count", "quote_count", "reply_count", "retweet_count", "retweeted")
+        values = {key: legacy[key] for key in keys}
+        values.update({
+            "user_id": int(legacy["user_id_str"]),
+            "id": int(legacy["id_str"]),
+            "created_at": to_datetime(legacy["created_at"]),
+            "raw_data": data
+        })
         return cls(**values)

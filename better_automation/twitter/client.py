@@ -22,7 +22,7 @@ from better_automation.twitter.errors import (
 from ..utils import to_json
 from ..base import BaseClient
 from .account import TwitterAccount, TwitterAccountStatus
-from .models import TwitterUserData
+from .models import TwitterUserData, Tweet
 from .utils import remove_at_sign, parse_oauth_html
 
 
@@ -44,13 +44,15 @@ class TwitterClient(BaseClient):
         'TweetResultByRestId': "V3vfsYzNEyD9tsf4xoFRgw",
         'ModerateTweet': "p'jF:GVqCjTcZol0xcBJjw",
         'DeleteTweet': "VaenaVgh5q5ih7kvyVjgtg",
-        'UserTweets': "Uuw5X2n3tuGE_SatnXUqLA",
+        'UserTweets': "V1ze5q3ijDS1VeLwLY0m7g",
         'TweetDetail': 'VWFGPVAGkZMGRKGe3GFFnA',
         'ProfileSpotlightsQuery': '9zwVLJ48lmVUk8u_Gh9DmA',
         'Following': 't-BPOrMIduGUJWO_LxcvNQ',
         'Followers': '3yX7xr2hKjcZYnXt6cU6lQ',
         'UserByScreenName': 'G3KGOASz96M-Qu0nwmGXNg',
     }
+    CAPTCHA_URL = 'https://twitter.com/account/access'
+    SITE_KEY = '0152B4EB-D2DC-460A-89A1-629838B529C9'
 
     @classmethod
     def _action_to_url(cls, action: str) -> tuple[str, str]:
@@ -798,3 +800,57 @@ class TwitterClient(BaseClient):
         response, response_json = await self.request("GET", url, params=params)
         messages = [entry["message"] for entry in response_json["inbox_initial_state"]["entries"] if "message" in entry]
         return messages
+
+    async def request_tweets(self, user_id: str | int, count: int = 20) -> list[Tweet]:
+        """
+        Огромное спасибо [Кузнице Ботов](https://t.me/bots_forge) за реализацию этого метода.
+        :return: Список твитов.
+        """
+        url, query_id = self._action_to_url("UserTweets")
+        variables = {
+            "userId": str(user_id),
+            "count": count,
+            "includePromotedContent": True,
+            "withQuickPromoteEligibilityTweetFields": True,
+            "withVoice": True,
+            "withV2Timeline": True
+        }
+        features = {
+            "responsive_web_graphql_exclude_directive_enabled": True,
+            "verified_phone_label_enabled": False,
+            "creator_subscriptions_tweet_preview_api_enabled": True,
+            "responsive_web_graphql_timeline_navigation_enabled": True,
+            "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
+            "c9s_tweet_anatomy_moderator_badge_enabled": True,
+            "tweetypie_unmention_optimization_enabled": True,
+            "responsive_web_edit_tweet_api_enabled": True,
+            "graphql_is_translatable_rweb_tweet_is_translatable_enabled": True,
+            "view_counts_everywhere_api_enabled": True,
+            "longform_notetweets_consumption_enabled": True,
+            "responsive_web_twitter_article_tweet_consumption_enabled": False,
+            "tweet_awards_web_tipping_enabled": False,
+            "freedom_of_speech_not_reach_fetch_enabled": True,
+            "standardized_nudges_misinfo": True,
+            "tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled": True,
+            "rweb_video_timestamps_enabled": True,
+            "longform_notetweets_rich_text_read_enabled": True,
+            "longform_notetweets_inline_media_enabled": True,
+            "responsive_web_media_download_video_enabled": False,
+            "responsive_web_enhance_cards_enabled": False
+        }
+        params = {
+            'variables': to_json(variables),
+            'features': to_json(features)
+        }
+        response, response_json = await self.request("GET", url, params=params)
+
+        tweets = []
+        for instruction in response_json['data']['user']['result']['timeline_v2']['timeline']['instructions']:
+            if instruction['type'] == 'TimelineAddEntries':
+                for entry in instruction['entries']:
+                    if entry['entryId'].startswith('tweet'):
+                        tweet_data = entry["content"]['itemContent']['tweet_results']['result']
+                        tweets.append(Tweet.from_raw_data(tweet_data))
+        return tweets
+
+
