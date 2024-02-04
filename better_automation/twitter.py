@@ -5,7 +5,7 @@ from .utils import load_lines, write_lines
 
 import twitter
 
-
+# TODO Перенести это в tweepy-self
 def from_file(
         filepath: Path | str,
         *,

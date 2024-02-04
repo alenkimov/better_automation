@@ -1,5 +1,5 @@
 import asyncio
-from better_automation.base import BasePlaywrightBrowser
+from better_automation.playwright_ import BasePlaywrightBrowser
 from better_automation.google import GooglePlaywrightBrowserContext, GoogleAccount
 from better_proxy import Proxy
 
@@ -33,7 +33,7 @@ async def main():
                 # Создайте экземпляр GooglePlaywrightBrowserContext для взаимодействия с Google через эмуляцию
                 #   на основе этого контекста и аккаунта Google
                 google = GooglePlaywrightBrowserContext(
-                    context, google_account, smshub_api_key='178005Uf888bc007efe825c490eabc8d4be75a3')
+                    context, google_account, smshub_api_key='...')
                 # Передайте найденные параметры для OAuth2 авторизации в метод oauth2
                 await google.login()
                 # oauth_code, redirect_url = await google.oauth2(**OAUTH2_DATA)

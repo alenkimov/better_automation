@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "better-automation"
-version = "3.0.0.b1"
+version = "3.0.0.b2"
 description = "Abuse tools"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
@@ -12,7 +12,6 @@ setuptools = "^69"
 tweepy-self = {version = "1.0.0b1", allow-prereleases = true}
 playwright-stealth = "^1"
 playwright = "^1"
-pillow = "^10"
 tqdm = "^4"
 pydantic = "^2"
 

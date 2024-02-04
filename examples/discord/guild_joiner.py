@@ -1,18 +1,15 @@
 """
 Скрипт для массового захода на сервер.
-
-pip install better-automation better-proxy
 """
 
 import asyncio
-from contextlib import asynccontextmanager
-from typing import AsyncContextManager
 from itertools import cycle
 from pathlib import Path
 from typing import Iterable
 
-from better_automation.discord import DiscordAccount, DiscordClient, DiscordAccountStatus, to_invite_code
-from better_automation.discord.errors import DiscordException
+from better_automation.legacy.discord import DiscordAccount, DiscordClient, DiscordAccountStatus, to_invite_code
+from better_automation.legacy.discord.errors import DiscordException
+from better_automation.legacy.discord.account import from_file as discord_from_file
 from better_proxy import Proxy
 
 INPUT_OUTPUT_DIR = Path("input-output")
@@ -26,17 +23,7 @@ MAX_TASKS = 100
 SEPARATOR = ":"
 FIELDS = ("auth_token", "password", "email")
 
-INVITE_CODE_OR_URL = "https://discord.com/invite/zenlesszonezero"
-
-
-@asynccontextmanager
-async def discord_client(
-        account: DiscordAccount,
-        proxy: Proxy = None,
-        verify: bool = False,
-) -> AsyncContextManager[DiscordClient]:
-    async with DiscordClient(account, proxy=proxy.as_url if proxy else None, verify=verify) as discord:
-        yield discord
+INVITE_CODE_OR_URL = "tabinft"
 
 
 async def join_guild(
@@ -52,7 +39,7 @@ async def join_guild(
     proxy_to_account_list = list(zip(cycle(proxies), accounts))
 
     for proxy, account in proxy_to_account_list:
-        async with discord_client(account, proxy=proxy) as discord:
+        async with DiscordClient(account, proxy=proxy) as discord:
             try:
                 invite_data = await discord.request_invite_data(invite_code)
                 print(f"{proxy} {account} (account status: {account.status})"
@@ -87,7 +74,7 @@ if __name__ == '__main__':
         print(f"(Необязательно) Внесите прокси в любом формате "
               f"\n\tв файл по пути {PROXIES_TXT}")
 
-    accounts = DiscordAccount.from_file(ACCOUNTS_TXT, separator=SEPARATOR, fields=FIELDS)
+    accounts = discord_from_file(ACCOUNTS_TXT, separator=SEPARATOR, fields=FIELDS)
     if not accounts:
         print(f"Внесите аккаунты в формате {SEPARATOR.join(FIELDS)}"
               f" (auth_token - обязательный параметр, остальные - нет)"

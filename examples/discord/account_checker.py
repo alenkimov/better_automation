@@ -15,9 +15,9 @@ from typing import AsyncContextManager
 from curl_cffi import requests
 from tqdm.asyncio import tqdm
 
-from better_automation.discord import DiscordAccount, DiscordClient
-from better_automation.discord.account import DiscordAccountStatus
-from better_automation.discord.errors import DiscordException
+from better_automation.legacy.discord import DiscordAccount, DiscordClient
+from better_automation.legacy.discord.account import DiscordAccountStatus
+from better_automation.legacy.discord.errors import DiscordException
 from better_automation.utils import gather
 from better_proxy import Proxy
 

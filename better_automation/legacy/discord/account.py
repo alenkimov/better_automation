@@ -5,7 +5,7 @@ from typing import Sequence, Iterable
 from pydantic import Field, BaseModel
 from twitter.utils import hidden_value
 
-from .utils import load_lines, write_lines
+from ...utils import load_lines, write_lines
 
 DISCORD_AUTH_TOKEN_PATTERN = r"^[A-Za-z0-9+._-]{72}$"
 
@@ -43,7 +43,7 @@ class DiscordAccount(BaseModel):
         return f"{self.__class__.__name__}(auth_token={self.short_auth_token}, username={self.username})"
 
     def __str__(self):
-        return self.short_auth_token
+        return self.hidden_auth_token
 
 
 def from_file(

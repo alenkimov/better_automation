@@ -8,19 +8,11 @@ pip install better-automation
 ```
 
 Набор инструментов для автоматизации а абуза:
-- Twitter
-- Discird
-- Google
-- googleapis
+- Twitter (на запросах с библиотекой [tweepy-self](https://github.com/alenkimov/tweepy-self))
+- Discord (на запросах с библиотекой [discord.py-self](https://github.com/dolfies/discord.py-self))
+- Google (с Playwright и на запросах)
 
 More libraries of the family:
 - [tweepy-self](https://github.com/alenkimov/tweepy-self)
 - [better-web3](https://github.com/alenkimov/better_web3)
 - [better-proxy](https://github.com/alenkimov/better_proxy)
-
-## Credits
-- [0xStarLabs](https://github.com/0xStarLabs) / [StarLabs-Discord](https://github.com/0xStarLabs/StarLabs-Discord)
-- [0xStarLabs](https://github.com/0xStarLabs) / [StarLabs-Twitter](https://github.com/0xStarLabs/StarLabs-Twitter)
-- [makarworld](https://github.com/makarworld) / [TwitterBot](https://github.com/makarworld/TwitterBot)
-- [dolfies](https://github.com/dolfies) / [discord.py-self](https://github.com/dolfies/discord.py-self)
-- [tweepy](https://github.com/tweepy) / [tweepy](https://github.com/tweepy/tweepy)
