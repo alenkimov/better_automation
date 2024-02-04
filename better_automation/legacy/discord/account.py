@@ -22,7 +22,7 @@ class DiscordAccount(BaseModel):
     email:      str | None = None
     name:       str | None = None
 
-    status:         DiscordAccountStatus = DiscordAccountStatus.UNKNOWN,
+    status:         DiscordAccountStatus = DiscordAccountStatus.UNKNOWN
     is_spammer:     bool = False
     is_quarantined: bool = False
     phone:          str | None = None
