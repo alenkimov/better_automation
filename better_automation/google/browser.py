@@ -15,8 +15,8 @@ from .errors import (
 )
 from .account import GoogleAccount, GoogleAccountStatus
 from .utils import check_cookies
-from ..sms import SmshubClient
-from ..sms.errors import SmsServiceError
+from ..smshub import SmshubClient
+from ..smshub.errors import SmsServiceError
 
 
 PromptType = Literal["consent", "select_account"] | None

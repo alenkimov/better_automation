@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "better-automation"
-version = "2.1.0.b22"
-description = "Unofficial Twitter, Discord, googleapis API"
+version = "3.0.0.b1"
+description = "Abuse tools"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
 packages = [{include = "better_automation"}]
@@ -9,16 +9,12 @@ packages = [{include = "better_automation"}]
 [tool.poetry.dependencies]
 python = "^3.11"
 setuptools = "^69"
-curl_cffi = {version = "0.6.0b7", allow-prereleases = true}
-better-proxy = "0.5.0"
-playwright = "^1"
+tweepy-self = {version = "1.0.0b1", allow-prereleases = true}
 playwright-stealth = "^1"
+playwright = "^1"
 pillow = "^10"
-yarl = "^1.9"
 tqdm = "^4"
 pydantic = "^2"
-beautifulsoup4 = "^4"
-lxml = "^5"
 
 [build-system]
 requires = ["poetry-core"]

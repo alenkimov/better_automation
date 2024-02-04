@@ -2,56 +2,42 @@
 Скрипт для установки статуса Twitter аккаунтов (проверка на бан).
 """
 
-import sys
 import asyncio
-from contextlib import asynccontextmanager
-from typing import AsyncContextManager
 from itertools import cycle
 from pathlib import Path
 from typing import Iterable
 
 from curl_cffi import requests
-
-from tqdm.asyncio import tqdm
-
-from better_automation.twitter import TwitterAccount, TwitterClient, TwitterAccountStatus
-from better_automation.utils import load_lines, write_lines, gather
 from better_proxy import Proxy
+from twitter._file_utils import load_lines, write_lines
 
-TwitterAccountWithAdditionalData = tuple[str, TwitterAccount]
-SortedAccounts = dict[TwitterAccountStatus: TwitterAccountWithAdditionalData]
+import twitter
+
+
+TwitterAccountWithAdditionalData = tuple[str, twitter.Account]
+SortedAccounts = dict[twitter.AccountStatus: TwitterAccountWithAdditionalData]
 
 INPUT_OUTPUT_DIR = Path("input-output")
 INPUT_OUTPUT_DIR.mkdir(exist_ok=True)
 
 PROXIES_TXT = INPUT_OUTPUT_DIR / "PROXIES.txt"
-ACCOUNTS_TXT = INPUT_OUTPUT_DIR / f"{TwitterAccountStatus.UNKNOWN}.txt"
+ACCOUNTS_TXT = INPUT_OUTPUT_DIR / f"{twitter.AccountStatus.UNKNOWN}.txt"
 [filepath.touch() for filepath in (PROXIES_TXT, ACCOUNTS_TXT)]
 
 MAX_TASKS = 100
 SEPARATOR = ":"
 
 
-@asynccontextmanager
-async def twitter_client(
-        account: TwitterAccount,
-        proxy: Proxy = None,
-        verify: bool = False,
-) -> AsyncContextManager[TwitterClient]:
-    async with TwitterClient(account, proxy=proxy.as_url if proxy else None, verify=verify) as twitter:
-        yield twitter
-
-
 def sort_accounts(
         accounts: Iterable[TwitterAccountWithAdditionalData]
 ) -> SortedAccounts:
-    status_to_account_with_additional_data = {status: list() for status in TwitterAccountStatus}
+    status_to_account_with_additional_data = {status: list() for status in twitter.AccountStatus}
     for additional_data, account in accounts:
         status_to_account_with_additional_data[account.status].append((additional_data, account))
     return status_to_account_with_additional_data
 
 
-def save_sorted_accounts_with_additional_data(sorted_accounts: dict[TwitterAccountStatus: (str, TwitterAccount)]):
+def save_sorted_accounts_with_additional_data(sorted_accounts: dict[twitter.AccountStatus: (str, twitter.Account)]):
     for status, accounts_with_additional_data in sorted_accounts.items():
         filepath = INPUT_OUTPUT_DIR / f'{status}.txt'
         lines = [additional_data for additional_data, account in accounts_with_additional_data]
@@ -61,11 +47,11 @@ def save_sorted_accounts_with_additional_data(sorted_accounts: dict[TwitterAccou
 def load_accounts_with_additional_data() -> list[TwitterAccountWithAdditionalData]:
     accounts = list()
     for file in INPUT_OUTPUT_DIR.iterdir():
-        if file.is_file() and file.stem in TwitterAccountStatus.__members__:
+        if file.is_file() and file.stem in twitter.AccountStatus.__members__:
             status = file.stem
             for additional_data in load_lines(file):
                 auth_token = additional_data.split(SEPARATOR)[0]
-                account = TwitterAccount(auth_token)
+                account = twitter.Account(auth_token)
                 account.status = status
                 accounts.append((additional_data, account))
     return accounts
@@ -76,14 +62,14 @@ def print_statistic(sorted_accounts: SortedAccounts):
         print(f"{status}: {len(accounts_with_additional_data)}")
 
 
-async def establish_account_status(account: TwitterAccount, proxy: Proxy = None):
-    async with twitter_client(account, proxy) as twitter:
+async def establish_account_status(account: twitter.Account, proxy: Proxy = None):
+    async with twitter.Client(account, proxy=proxy) as twitter_client:
         try:
-            await twitter.establish_status()
+            await twitter_client.establish_status()
         except requests.errors.RequestsError:
             pass
 
-    tqdm.write(f"{proxy.fixed_length} {account} {account.status}")
+    print(f"{proxy.fixed_length} {account} {account.status}")
 
 
 async def check_accounts(
@@ -101,10 +87,10 @@ async def check_accounts(
     tasks = []
     for proxy, account_with_additional_data in proxy_to_account_list:
         account = account_with_additional_data[1]
-        if account.status == TwitterAccountStatus.UNKNOWN:
+        if account.status == twitter.AccountStatus.UNKNOWN:
             tasks.append(establish_account_status(account, proxy=proxy))
     try:
-        await gather(*tasks, max_tasks=MAX_TASKS, file=sys.stdout)
+        await asyncio.gather(*tasks)
     finally:
         sorted_accounts = sort_accounts(accounts)
         save_sorted_accounts_with_additional_data(sorted_accounts)

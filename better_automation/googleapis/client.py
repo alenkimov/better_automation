@@ -1,4 +1,5 @@
-from ..base import BaseClient
+from twitter._client import BaseClient
+
 from .models import AuthToken
 from .errors import (
     HTTPException,
@@ -18,7 +19,7 @@ class GoogleAPIsClient(BaseClient):
     async def request(self, method, url, **kwargs):
         params = kwargs["params"] = kwargs.get("params") or {}
         params["key"] = self.key
-        response = await self.session.request(method, url, **kwargs)
+        response = await self._session.request(method, url, **kwargs)
         data = response.json()
 
         if response.status_code == 400:

@@ -4,6 +4,7 @@ from typing import Sequence, Iterable
 
 from pydantic import BaseModel
 
+from twitter.utils import hidden_value
 from ..utils import load_lines, write_lines
 
 
@@ -38,26 +39,9 @@ class GoogleAccount(BaseModel):
     cookies:        list | None = None
     status: GoogleAccountStatus = GoogleAccountStatus.UNKNOWN
 
-    def __init__(
-            self,
-            email: str,
-            password: str,
-            *,
-            recovery_email: str = None,
-            cookies: list = None
-    ):
-        super().__init__(
-            email=email,
-            password=password,
-            recovery_email=recovery_email,
-            cookies=cookies,
-        )
-
     @property
-    def short_password(self) -> str:
-        start = self.password[:2]
-        end = self.password[-2:]
-        return f"{start}**{end}"
+    def hidden_password(self) -> str | None:
+        return hidden_value(self.password) if self.password else None
 
     def __repr__(self):
         return f"{self.__class__.__name__}(email={self.email})"
@@ -65,44 +49,41 @@ class GoogleAccount(BaseModel):
     def __str__(self):
         return self.email
 
-    @classmethod
-    def from_file(
-            cls,
-            filepath: Path | str,
-            *,
-            separator: str = ":",
-            fields: Sequence[str] = ("email", "password", "recovery_email"),
-    ):
-        """
-        :param filepath: Путь до файла с данными об аккаунтах.
-        :param separator: Разделитель между данными в строке.
-        :param fields: Кортеж, содержащий имена полей в порядке их появления в строке.
-         Должно содержать как минимум два поля - email и password: `("email", )`
-        :return: Список аккаунтов.
-        """
-        accounts = []
-        for line in load_lines(filepath):
-            data = dict(zip(fields, line.split(separator)))
-            data.update({key: None for key in data if not data[key]})
-            accounts.append(cls(**data))
 
-        return accounts
+def from_file(
+        filepath: Path | str,
+        *,
+        separator: str = ":",
+        fields: Sequence[str] = ("email", "password", "recovery_email"),
+) -> list[GoogleAccount]:
+    """
+    :param filepath: Путь до файла с данными об аккаунтах.
+    :param separator: Разделитель между данными в строке.
+    :param fields: Кортеж, содержащий имена полей в порядке их появления в строке.
+     Должно содержать как минимум два поля - email и password: `("email", )`
+    :return: Список аккаунтов.
+    """
+    accounts = []
+    for line in load_lines(filepath):
+        data = dict(zip(fields, line.split(separator)))
+        data.update({key: None for key in data if not data[key]})
+        accounts.append(GoogleAccount(**data))
+    return accounts
 
-    @classmethod
-    def to_file(
-            cls,
-            filepath: Path | str,
-            accounts: Iterable["GoogleAccount"],
-            *,
-            separator: str = ";",
-            fields: Sequence[str] = ("email", "password", "recovery_email"),
-    ):
-        lines = []
-        for account in accounts:
-            account_data = []
-            for field_name in fields:
-                field = getattr(account, field_name)
-                field = field if field is not None else ""
-                account_data.append(field)
-            lines.append(separator.join(account_data))
-        write_lines(filepath, lines)
+
+def to_file(
+        filepath: Path | str,
+        accounts: Iterable[GoogleAccount],
+        *,
+        separator: str = ";",
+        fields: Sequence[str] = ("email", "password", "recovery_email"),
+):
+    lines = []
+    for account in accounts:
+        account_data = []
+        for field_name in fields:
+            field = getattr(account, field_name)
+            field = field if field is not None else ""
+            account_data.append(field)
+        lines.append(separator.join(account_data))
+    write_lines(filepath, lines)

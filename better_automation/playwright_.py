@@ -51,7 +51,6 @@ class BasePlaywrightBrowser:
         proxy = Proxy.from_str(proxy).as_playwright_proxy if proxy else None
         context = await self._browser.new_context(proxy=proxy, **context_kwargs)
         context.set_default_timeout(self.default_timeout)
-        # thx @ruslanwuwei
         await context.add_init_script("delete Object.getPrototypeOf(navigator).webdriver")
         yield context
         await context.close()

@@ -1,7 +1,8 @@
 import asyncio
 import time
 
-from ..base import BaseClient
+from twitter._client import BaseClient
+
 from .errors import SmsServiceError
 
 
@@ -16,7 +17,7 @@ class SmshubClient(BaseClient):
     async def _request(self, method: str, url: str, **kwargs):
         params = kwargs["params"] = kwargs.get("params") or {}
         params["api_key"] = self.key
-        response = await self.session.request(method, url, **kwargs)
+        response = await self._session.request(method, url, **kwargs)
 
         if response.text.startswith('ERROR'):
             raise SmsServiceError(response.text)
