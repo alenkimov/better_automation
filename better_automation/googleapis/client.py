@@ -1,4 +1,4 @@
-from twitter._client import BaseClient
+from twitter.base import BaseClient
 
 from .models import AuthToken
 from .errors import (
