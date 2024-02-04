@@ -3,11 +3,7 @@ from pathlib import Path
 from typing import Sequence, Iterable
 
 from pydantic import Field, BaseModel
-from twitter.utils import hidden_value
-
-from ...utils import load_lines, write_lines
-
-DISCORD_AUTH_TOKEN_PATTERN = r"^[A-Za-z0-9+._-]{72}$"
+from twitter.utils import hidden_value, load_lines, write_lines
 
 
 class DiscordAccountStatus(StrEnum):
@@ -20,7 +16,7 @@ class DiscordAccountStatus(StrEnum):
 
 
 class DiscordAccount(BaseModel):
-    auth_token: str = Field(default=None, pattern=DISCORD_AUTH_TOKEN_PATTERN)
+    auth_token: str = Field(default=None, pattern=r"^[A-Za-z0-9+._-]{72}$")
     username:   str | None = None
     password:   str | None = None
     email:      str | None = None

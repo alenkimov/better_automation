@@ -1,9 +1,8 @@
-from . import utils, twitter, googleapis, google, legacy
+from . import utils, googleapis, google, legacy
 
 
 __all__ = [
     "utils",
-    "twitter",
     "googleapis",
     "google",
     "legacy",

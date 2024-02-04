@@ -7,7 +7,7 @@
 pip install better-automation
 ```
 
-Набор инструментов для автоматизации а абуза:
+Набор инструментов для автоматизации:
 - Twitter (на запросах с библиотекой [tweepy-self](https://github.com/alenkimov/tweepy-self))
 - Discord (на запросах с библиотекой [discord.py-self](https://github.com/dolfies/discord.py-self))
 - Google (с Playwright и на запросах)

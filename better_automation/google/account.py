@@ -4,8 +4,7 @@ from typing import Sequence, Iterable
 
 from pydantic import BaseModel
 
-from twitter.utils import hidden_value
-from ..utils import load_lines, write_lines
+from twitter.utils import hidden_value, load_lines, write_lines
 
 
 def format_cookies(cookies):

@@ -5,7 +5,7 @@ from typing import Any, Literal
 from time import time
 import string
 
-from twitter._client import BaseClient
+from twitter.base import BaseClient
 from curl_cffi import requests
 from yarl import URL
 

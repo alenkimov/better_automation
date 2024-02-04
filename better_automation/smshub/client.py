@@ -1,7 +1,7 @@
 import asyncio
 import time
 
-from twitter._client import BaseClient
+from twitter.base import BaseClient
 
 from .errors import SmsServiceError
 
