@@ -54,6 +54,13 @@ class Client(discord.Client):
         for attempt in range(max_retries):
             try:
                 await super().start(self.account.auth_token, reconnect=reconnect)
+                self.account.status = "GOOD"
+                self.account.id = self.user.id
+                self.account.email = self.user.email
+                self.account.name = self.user.display_name
+                self.account.username = self.user.name
+                self.account.bio = self.user.bio
+                self.account.phone = self.user.phone
                 break  # If successful, exit the loop
             except ValueError as e:
                 if "is not a valid HTTPStatus" in str(e):

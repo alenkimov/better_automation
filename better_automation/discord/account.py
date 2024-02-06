@@ -20,13 +20,14 @@ class Account(BaseModel):
     username:   str | None = None
     password:   str | None = None
     email:      str | None = None
+    phone:          str | None = None
     name:       str | None = None
+    bio:        str | None = None
     id:         str | None = None
 
     status:         AccountStatus = AccountStatus.UNKNOWN
     is_spammer:     bool = False
     is_quarantined: bool = False
-    phone:          str | None = None
 
     @property
     def hidden_auth_token(self) -> str | None:
