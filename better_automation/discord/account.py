@@ -6,7 +6,7 @@ from pydantic import Field, BaseModel
 from twitter.utils import hidden_value, load_lines, write_lines
 
 
-class DiscordAccountStatus(StrEnum):
+class AccountStatus(StrEnum):
     BAD_TOKEN = "BAD_TOKEN"  # (401, 403?)
     UNKNOWN   = "UNKNOWN"
     GOOD      = "GOOD"
@@ -15,14 +15,15 @@ class DiscordAccountStatus(StrEnum):
         return self.value
 
 
-class DiscordAccount(BaseModel):
+class Account(BaseModel):
     auth_token: str = Field(default=None, pattern=r"^[A-Za-z0-9+._-]{72}$")
     username:   str | None = None
     password:   str | None = None
     email:      str | None = None
     name:       str | None = None
+    id:         str | None = None
 
-    status:         DiscordAccountStatus = DiscordAccountStatus.UNKNOWN
+    status:         AccountStatus = AccountStatus.UNKNOWN
     is_spammer:     bool = False
     is_quarantined: bool = False
     phone:          str | None = None
@@ -42,12 +43,12 @@ class DiscordAccount(BaseModel):
         return self.hidden_auth_token
 
 
-def from_file(
+def load_accounts_from_file(
         filepath: Path | str,
         *,
         separator: str = ":",
         fields: Sequence[str] = ("auth_token", "password", "email", "username"),
-) -> list[DiscordAccount]:
+) -> list[Account]:
     """
     :param filepath: Путь до файла с данными об аккаунтах.
     :param separator: Разделитель между данными в строке.
@@ -59,13 +60,13 @@ def from_file(
     for line in load_lines(filepath):
         data = dict(zip(fields, line.split(separator)))
         data.update({key: None for key in data if not data[key]})
-        accounts.append(DiscordAccount(**data))
+        accounts.append(Account(**data))
     return accounts
 
 
-def to_file(
+def write_accounts_to_file(
         filepath: Path | str,
-        accounts: Iterable[DiscordAccount],
+        accounts: Iterable[Account],
         *,
         separator: str = ":",
         fields: Sequence[str] = ("auth_token", "password", "email", "username"),

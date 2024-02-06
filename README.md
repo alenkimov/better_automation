@@ -1,18 +1,29 @@
 # Better Site Automation
 [![Telegram channel](https://img.shields.io/endpoint?url=https://runkit.io/damiankrawczyk/telegram-badge/branches/master?url=https://t.me/cum_insider)](https://t.me/cum_insider)
-[![PyPI version info](https://img.shields.io/pypi/v/better-automation.svg)](https://pypi.python.org/pypi/better-automation)
-[![PyPI supported Python versions](https://img.shields.io/pypi/pyversions/better-automation.svg)](https://pypi.python.org/pypi/better-automation)
-
-```bash
-pip install better-automation
-```
 
 Набор инструментов для автоматизации:
-- Twitter (на запросах с библиотекой [tweepy-self](https://github.com/alenkimov/tweepy-self))
-- Discord (на запросах с библиотекой [discord.py-self](https://github.com/dolfies/discord.py-self))
-- Google (с Playwright и на запросах)
+- Поддержка прокси в любом из существующих форматов
+- Все (кроме Google) на запросах через curl_cffi
+- Все аккаунты — Pydantic модели
+- Google login
+- Google OAuth2
+- Google привязка номера с smshub
+- Все из библиотеки [discord.py-self](https://github.com/dolfies/discord.py-self) + Discord joiner с решением капчи через CapSolver и соглашением с правилами сервера
+- Все из библиотеки [tweepy-self](https://github.com/alenkimov/tweepy-self): логин, анлок, totp, OAuth, OAuth2, твиты, лайки, сообщения и многое другое..
+- googleapis для OAuth2. Использовалось в Well3 (yogapetz) для авторизации и может использоваться в других проектах.
 
 More libraries of the family:
 - [tweepy-self](https://github.com/alenkimov/tweepy-self)
 - [better-web3](https://github.com/alenkimov/better_web3)
 - [better-proxy](https://github.com/alenkimov/better_proxy)
+
+## Installation
+pip
+```bash
+pip install git+https://github.com/alenkimov/better_automation.git@pre-release#egg=better_automation
+```
+
+poetry
+```bash
+poetry add better-automation --git https://github.com/alenkimov/better_automation.git --rev pre-release
+```
