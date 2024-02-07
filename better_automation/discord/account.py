@@ -16,7 +16,7 @@ class AccountStatus(StrEnum):
 
 
 class Account(BaseModel):
-    auth_token: str = Field(default=None, pattern=r"^[A-Za-z0-9+._-]{72}$")
+    auth_token: str = Field(default=None, regex=r"^[A-Za-z0-9+._-]{1,72}$")
     username:   str | None = None
     password:   str | None = None
     email:      str | None = None
