@@ -48,19 +48,21 @@ class Client(discord.Client):
         token = solution.solution["token"]
         return token
 
+    async def on_ready(self):
+        self.account.status = "GOOD"
+        self.account.id = self.user.id
+        self.account.email = self.user.email
+        self.account.name = self.user.display_name
+        self.account.username = self.user.name
+        self.account.bio = self.user.bio
+        self.account.phone = self.user.phone
+
     async def start_with_discord_account(self, account: Account, *, reconnect: bool = True):
         self.account = account
         max_retries = 3  # Set the maximum number of retries
         for attempt in range(max_retries):
             try:
                 await super().start(self.account.auth_token, reconnect=reconnect)
-                self.account.status = "GOOD"
-                self.account.id = self.user.id
-                self.account.email = self.user.email
-                self.account.name = self.user.display_name
-                self.account.username = self.user.name
-                self.account.bio = self.user.bio
-                self.account.phone = self.user.phone
                 break  # If successful, exit the loop
             except ValueError as e:
                 if "is not a valid HTTPStatus" in str(e):
