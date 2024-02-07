@@ -1,4 +1,5 @@
 import asyncio
+from urllib.parse import urlparse
 
 import discord
 from discord import CaptchaRequired
@@ -40,7 +41,8 @@ class Client(discord.Client):
         }
         if self.http.proxy:
             hcaptcha["captcha_type"] = HCaptchaTypeEnm.HCaptchaTask
-            hcaptcha["proxy"] = self.http.proxy
+            parsed_proxy = urlparse(self.http.proxy)
+            hcaptcha["proxy"] = f"{parsed_proxy.scheme}:{parsed_proxy.hostname}:{parsed_proxy.port}:{parsed_proxy.username}:{parsed_proxy.password}"
         else:
             hcaptcha["captcha_type"] = HCaptchaTypeEnm.HCaptchaTaskProxyless
 

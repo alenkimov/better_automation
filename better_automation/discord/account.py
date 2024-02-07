@@ -2,7 +2,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Sequence, Iterable
 
-from pydantic import Field, BaseModel
+from pydantic import BaseModel
 from twitter.utils import hidden_value, load_lines, write_lines
 
 
@@ -20,7 +20,7 @@ class Account(BaseModel):
     username:   str | None = None
     password:   str | None = None
     email:      str | None = None
-    phone:          str | None = None
+    phone:      str | None = None
     name:       str | None = None
     bio:        str | None = None
     id:         str | None = None

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "better-automation"
-version = "3.0.0.b12"
+version = "3.0.0.b13"
 description = "Abuse tools"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
