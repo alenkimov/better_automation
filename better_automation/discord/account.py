@@ -7,8 +7,8 @@ from twitter.utils import hidden_value, load_lines, write_lines
 
 
 class AccountStatus(StrEnum):
-    BAD_TOKEN = "BAD_TOKEN"  # (401, 403?)
     UNKNOWN   = "UNKNOWN"
+    BAD_TOKEN = "BAD_TOKEN"
     GOOD      = "GOOD"
 
     def __str__(self):
@@ -19,15 +19,14 @@ class Account(BaseModel):
     auth_token: str
     username:   str | None = None
     password:   str | None = None
+    flags:      int | None = None
     email:      str | None = None
     phone:      str | None = None
     name:       str | None = None
     bio:        str | None = None
     id:         str | None = None
 
-    status:         AccountStatus = AccountStatus.UNKNOWN
-    is_spammer:     bool = False
-    is_quarantined: bool = False
+    status: AccountStatus = AccountStatus.UNKNOWN
 
     @property
     def hidden_auth_token(self) -> str | None:

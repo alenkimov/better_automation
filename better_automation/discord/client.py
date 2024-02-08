@@ -1,11 +1,8 @@
 import asyncio
-from urllib.parse import urlparse
 
 import discord
-from discord import CaptchaRequired
 from discord.http import Route
 from discord.types.snowflake import Snowflake
-from python3_capsolver.hcaptcha import HCaptcha, HCaptchaTypeEnm
 from better_proxy import Proxy
 
 from .account import Account
@@ -15,49 +12,25 @@ class Client(discord.Client):
     """
     - Принимает прокси в формате URL и better-proxy.
     - Метод agree_guild_rules для принятия правил сервера.
-    - Обработка капчи с CapSolver.
     """
-    def __init__(self, capsolver_api_key: str | None,  **options):
+    def __init__(self, **options):
         proxy = options.pop('proxy', None)
         if isinstance(proxy, Proxy):
             options['proxy'] = proxy.as_url
 
         super().__init__(**options)
-        self.capsolver_api_key = capsolver_api_key
         self.account: Account | None = None
 
-    async def handle_captcha(self, exception: CaptchaRequired, /) -> str:
-        if not self.capsolver_api_key:
-            await super().handle_captcha(exception)
-
-        hcaptcha = {
-            "api_key": self.capsolver_api_key,
-            "websiteURL": "https://discord.com/channels/@me",
-            "websiteKey": exception.sitekey,
-            "enterprisePayload": {
-                "rqdata": exception.rqdata
-            },
-            "userAgent": self.http.user_agent,
-        }
-        if self.http.proxy:
-            hcaptcha["captcha_type"] = HCaptchaTypeEnm.HCaptchaTask
-            parsed_proxy = urlparse(self.http.proxy)
-            hcaptcha["proxy"] = f"{parsed_proxy.scheme}:{parsed_proxy.hostname}:{parsed_proxy.port}:{parsed_proxy.username}:{parsed_proxy.password}"
-        else:
-            hcaptcha["captcha_type"] = HCaptchaTypeEnm.HCaptchaTaskProxyless
-
-        solution = await HCaptcha(**hcaptcha).aio_captcha_handler()
-        token = solution.solution["token"]
-        return token
-
     async def on_ready(self):
-        self.account.status = "GOOD"
-        self.account.id = self.user.id
-        self.account.email = self.user.email
-        self.account.name = self.user.display_name
-        self.account.username = self.user.name
-        self.account.bio = self.user.bio
-        self.account.phone = self.user.phone
+        if self.account:
+            self.account.status = "GOOD"
+            self.account.id = self.user.id
+            self.account.email = self.user.email
+            self.account.name = self.user.display_name
+            self.account.username = self.user.name
+            self.account.bio = self.user.bio
+            self.account.phone = self.user.phone
+            self.account.flags = self.user._flags
 
     async def start_with_discord_account(self, account: Account, *, reconnect: bool = True):
         self.account = account
@@ -78,16 +51,12 @@ class Client(discord.Client):
             except discord.errors.LoginFailure:
                 self.account.status = "BAD_TOKEN"
 
-    async def _request_guild_rules_form(
-            self,
-            invite_code: str,
-            guild_id: Snowflake,
-    ):
+    async def _request_guild_rules_form(self, invite: discord.Invite):
         params = {
             "with_guild": "false",
-            "invite_code": invite_code,
+            "invite_code": invite.code,
         }
-        route = Route('GET', '/guilds/{guild_id}/member-verification', guild_id=guild_id)
+        route = Route('GET', '/guilds/{guild_id}/member-verification', guild_id=invite.guild.id)
         return await self.http.request(route, params=params)
 
     async def _agree_guild_rules(
@@ -104,15 +73,23 @@ class Client(discord.Client):
         route = Route('PUT', '/guilds/{guild_id}/requests/@me', guild_id=guild_id)
         return await self.http.request(route, json=payload)
 
-    async def agree_guild_rules(
-            self,
-            url: str,
-            guild_id: Snowflake,
-    ):
-        invite = discord.utils.resolve_invite(url)
+    async def agree_guild_rules(self, url: str | discord.Invite):
+        state = self._connection
+        resolved = discord.utils.resolve_invite(url)
+
+        data = await state.http.get_invite(
+            resolved.code,
+            with_counts=True,
+            input_value=resolved.code if isinstance(url, discord.Invite) else url,
+        )
+        if isinstance(url, discord.Invite):
+            invite = url
+        else:
+            invite = discord.Invite.from_incomplete(state=state, data=data)
+
         try:
-            rules_form = await self._request_guild_rules_form(invite.code, guild_id)
-            return await self._agree_guild_rules(guild_id, rules_form)
+            rules_form = await self._request_guild_rules_form(invite)
+            return await self._agree_guild_rules(invite.guild.id, rules_form)
         except discord.errors.HTTPException as exc:
             if exc.code != 150009:
                 raise
