@@ -3,7 +3,7 @@
 
 Набор инструментов для автоматизации:
 - Все из библиотеки [tweepy-self](https://github.com/alenkimov/tweepy-self): логин, анлок, totp, OAuth, OAuth2, твиты, лайки, сообщения и многое другое..
-- Дополнения для [discord.py-self](https://github.com/dolfies/discord.py-self) в виде метода для соглашения с правилами сервера.
+- Дополнение для [discord.py-self](https://github.com/dolfies/discord.py-self) в виде метода для соглашения с правилами сервера.
 - Google login и OAuth2 на [Playwright](https://github.com/microsoft/playwright).
 - googleapis для OAuth2. Использовалось в Well3 (yogapetz) для авторизации и может использоваться в других проектах.
 
