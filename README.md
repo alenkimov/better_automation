@@ -1,4 +1,4 @@
-# Better Site Automation
+# Better Site Automation v3
 [![Telegram channel](https://img.shields.io/endpoint?url=https://runkit.io/damiankrawczyk/telegram-badge/branches/master?url=https://t.me/cum_insider)](https://t.me/cum_insider)
 
 Набор инструментов для автоматизации:
