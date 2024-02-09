@@ -19,10 +19,10 @@ More libraries of the family:
 ## Installation
 pip
 ```bash
-pip install git+https://github.com/alenkimov/better_automation.git@pre-release#egg=better_automation
+pip install git+https://github.com/alenkimov/better_automation.git#egg=better_automation
 ```
 
 poetry
 ```bash
-poetry add better-automation --git https://github.com/alenkimov/better_automation.git --rev pre-release
+poetry add better-automation --git https://github.com/alenkimov/better_automation.git
 ```
