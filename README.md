@@ -2,15 +2,14 @@
 [![Telegram channel](https://img.shields.io/endpoint?url=https://runkit.io/damiankrawczyk/telegram-badge/branches/master?url=https://t.me/cum_insider)](https://t.me/cum_insider)
 
 Набор инструментов для автоматизации:
-- Поддержка прокси в любом из существующих форматов
-- Все (кроме Google) на запросах через curl_cffi
-- Все аккаунты — Pydantic модели
-- Google login
-- Google OAuth2
-- Google привязка номера с smshub
-- Все из библиотеки [discord.py-self](https://github.com/dolfies/discord.py-self) + Discord joiner с соглашением с правилами сервера (без решения капчи)
 - Все из библиотеки [tweepy-self](https://github.com/alenkimov/tweepy-self): логин, анлок, totp, OAuth, OAuth2, твиты, лайки, сообщения и многое другое..
+- Дополнения для [discord.py-self](https://github.com/dolfies/discord.py-self) в виде метода для соглашения с правилами сервера.
+- Google login и OAuth2 на [Playwright](https://github.com/microsoft/playwright).
 - googleapis для OAuth2. Использовалось в Well3 (yogapetz) для авторизации и может использоваться в других проектах.
+
+Особенности:
+- Поддержка прокси в любом из существующих форматов благодаря [better-proxy](https://github.com/alenkimov/better_proxy)
+- Все (кроме Google) на запросах через [curl_cffi](https://github.com/yifeikong/curl_cffi)
 
 More libraries of the family:
 - [tweepy-self](https://github.com/alenkimov/tweepy-self)
