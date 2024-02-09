@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "better-automation"
-version = "3.0.0.b15"
+version = "3.0.0.b16"
 description = "Abuse tools"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
@@ -13,6 +13,7 @@ discord-py-self = {git = "https://github.com/dolfies/discord.py-self.git", rev =
 tweepy-self = {version = "1.2.1", allow-prereleases = true}
 playwright-stealth = "^1"
 playwright = "^1"
+unicaps = "^1.2"
 tqdm = "^4"
 
 [build-system]

@@ -1,13 +1,8 @@
-"""
-Скрипт для массового захода на сервер.
-"""
-
 import asyncio
 from itertools import cycle
 from pathlib import Path
-import logging
 
-import discord
+import twitter.utils
 from better_proxy import Proxy
 from better_automation import discord as better_discord
 
@@ -15,37 +10,29 @@ INPUT_OUTPUT_DIR = Path("input-output")
 INPUT_OUTPUT_DIR.mkdir(exist_ok=True)
 
 PROXIES_TXT = INPUT_OUTPUT_DIR / "PROXIES.txt"
-ACCOUNTS_TXT = INPUT_OUTPUT_DIR / f"{better_discord.AccountStatus.GOOD}.txt"
-[filepath.touch() for filepath in (PROXIES_TXT, ACCOUNTS_TXT)]
+DISCORDS_TXT = INPUT_OUTPUT_DIR / f"DISCORDS.txt"
+[filepath.touch() for filepath in (PROXIES_TXT, DISCORDS_TXT)]
 
-MAX_TASKS = 100
-SEPARATOR = ":"
-FIELDS = ("auth_token", )
-
-# INVITE = "https://discord.gg/tabinft"
-INVITE = "tabinft"
-
-discord.utils.setup_logging(level=logging.INFO)
+INVITE = "zenlesszonezero"
 
 
 class GuildJoiner(better_discord.Client):
     def __init__(self, invite: str, **options):
         super().__init__(**options)
-        self.invite_url = invite
+        self.invite = invite
 
     async def on_ready(self):
-        await super().on_ready()
-
-        if not self.account.phone:
-            print(f"{self.account} No phone number")
+        print(f'[@{self.user}] Logged on')
+        if not self.user.phone:
+            print(f"[@{self.user}] No phone number!")
             await self.close()
             return
 
-        print(f'Logged on as @{self.user}')
-
-        invite = await self.accept_invite(self.invite_url)
-        print(f"Сервер {invite.guild.name} ({invite.approximate_member_count} members)")
+        invite = await self.accept_invite(self.invite)
+        guild_info = f"{invite.guild.name} guild ({invite.approximate_member_count} members)"
+        print(f"[@{self.user}] {guild_info}: joined guild")
         await self.agree_guild_rules(invite)
+        print(f"[@{self.user}] {guild_info}: accepted rules")
 
         await self.close()
         return
@@ -53,15 +40,15 @@ class GuildJoiner(better_discord.Client):
 
 async def join_guild(
         proxies: list[Proxy],
-        accounts: list[better_discord.Account],
+        discord_tokens: list[str],
         invite: str,
 ):
     if not proxies:
         proxies = (None, )
 
-    for proxy, account in zip(cycle(proxies), accounts):
+    for proxy, discord_token in zip(cycle(proxies), discord_tokens):
         joiner = GuildJoiner(invite, proxy=proxy)
-        await joiner.start_with_discord_account(account)
+        await joiner.start(discord_token)
 
 
 if __name__ == '__main__':
@@ -71,11 +58,10 @@ if __name__ == '__main__':
         print(f"(Необязательно) Внесите прокси в любом формате "
               f"\n\tв файл по пути {PROXIES_TXT}")
 
-    accounts = better_discord.load_accounts_from_file(ACCOUNTS_TXT, separator=SEPARATOR, fields=FIELDS)
-    if not accounts:
-        print(f"Внесите аккаунты в формате {SEPARATOR.join(FIELDS)}"
-              f" (auth_token - обязательный параметр, остальные - нет)"
-              f"\n\tв файл по пути {ACCOUNTS_TXT}")
+    discord_tokens = twitter.utils.load_lines(DISCORDS_TXT)
+    if not discord_tokens:
+        print(f"Внесите Discord токены"
+              f"\n\tв файл по пути {DISCORDS_TXT}")
         quit()
 
-    asyncio.run(join_guild(proxies, accounts, INVITE))
+    asyncio.run(join_guild(proxies, discord_tokens, INVITE))
