@@ -9,7 +9,7 @@ packages = [{include = "better_automation"}]
 [tool.poetry.dependencies]
 python = "^3.11"
 discord-py-self = {git = "https://github.com/dolfies/discord.py-self.git", rev = "refactor/tls"}
-tweepy-self = "1.2.2"
+tweepy-self = "1.4.0"
 playwright-stealth = "^1"
 playwright = "^1"
 
