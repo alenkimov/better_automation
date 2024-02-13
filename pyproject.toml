@@ -1,17 +1,15 @@
 [tool.poetry]
 name = "better-automation"
 version = "3.0.0"
-description = "Abuse tools"
+description = "tweepy-self, Google, googleapis, smshub"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
 packages = [{include = "better_automation"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-discord-py-self = {git = "https://github.com/dolfies/discord.py-self.git", rev = "refactor/tls"}
 tweepy-self = "1.4.0"
 playwright-stealth = "^1"
-playwright = "^1"
 
 [build-system]
 requires = ["poetry-core"]

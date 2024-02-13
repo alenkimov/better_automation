@@ -1,8 +1,8 @@
-from . import googleapis, google, discord
+from . import googleapis, google, smshub
 
 
 __all__ = [
     "googleapis",
     "google",
-    "discord",
+    "smshub",
 ]

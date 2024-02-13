@@ -3,9 +3,8 @@
 
 Набор инструментов для автоматизации:
 - Все из библиотеки [tweepy-self](https://github.com/alenkimov/tweepy-self): логин, анлок, totp, OAuth, OAuth2, твиты, лайки, сообщения и многое другое..
-- Дополнение для [discord.py-self](https://github.com/dolfies/discord.py-self) в виде метода для соглашения с правилами сервера.
-- Google login и OAuth2 на [Playwright](https://github.com/microsoft/playwright).
 - googleapis для OAuth2. Использовалось в Well3 (yogapetz) для авторизации и может использоваться в других проектах.
+- Google login и OAuth2 на [Playwright](https://github.com/microsoft/playwright).
 
 Особенности:
 - Поддержка прокси в любом из существующих форматов благодаря [better-proxy](https://github.com/alenkimov/better_proxy)
@@ -17,12 +16,6 @@ More libraries of the family:
 - [better-proxy](https://github.com/alenkimov/better_proxy)
 
 ## Installation
-pip
 ```bash
-pip install git+https://github.com/alenkimov/better_automation.git#egg=better_automation
-```
-
-poetry
-```bash
-poetry add better-automation --git https://github.com/alenkimov/better_automation.git
+pip install better-automation
 ```
