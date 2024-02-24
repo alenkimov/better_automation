@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "better-automation"
-version = "3.0.2"
+version = "3.0.3"
 description = "tweepy-self, Google, googleapis, smshub"
 authors = ["Alen <alen.kimov@gmail.com>"]
 readme = "README.md"
@@ -9,7 +9,7 @@ packages = [{include = "better_automation"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-tweepy-self = "1.6.2"
+tweepy-self = "^1"
 playwright-stealth = "^1"
 
 [build-system]
